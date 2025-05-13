@@ -1,0 +1,22 @@
+version: "3"
+services:
+  selenium-hub:
+    image: selenium/hub:latest  # Версия Selenium
+    container_name: selenium-hub
+    ports:
+      - "4444:4444"  # Порт для доступа к Selenium Grid
+
+  chrome:
+    image: selenium/node-chrome:nightly
+    container_name: selenium-node-chrome
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - ENABLE_VNC=true  # Включение VNC
+      - VNC_NO_PASSWORD=false  # Установить true, если не требуется пароль
+      - VNC_PASSWORD=secret # Пароль для VNC (если требуется)
+    ports:
+    - "5900:5900"  # Порт для VNC
