@@ -1,11 +1,12 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QPushButton, QLineEdit, QSizePolicy, QShortcut, QLineEdit
 from PyQt5.QtWebEngineWidgets import QWebEngineView
-from PyQt5.QtCore import QUrl
+from PyQt5.QtCore import QUrl, QTimer
 from PyQt5.QtGui import QKeySequence, QTextCharFormat, QTextCursor, QColor
 from bs4 import BeautifulSoup
 import sys
 import requests
-from pyTest import set_driver
+from selenium_test import set_driver  # Импортируем функцию для установки драйвера Selenium
+from ScrollbarMarksWidget import ScrollbarMarks  # Импортируем класс для пометок на скроллбаре
 # from selenium import webdriver
 # from selenium.webdriver.chrome.service import Service
 # from selenium.webdriver.chrome.options import Options
@@ -90,10 +91,49 @@ class WebScrapingInterface(QMainWindow):
 
         self.prev_result_shortcut = QShortcut(QKeySequence("Shift+F3"), self)
         self.prev_result_shortcut.activated.connect(lambda: self.move_to_search_result(-1))  # Предыдущее вхождение
+
+        # Подключить сигнал contentsChanged к методу обновления размеров scrollbar_marks
+        self.html_view.document().contentsChanged.connect(self.update_scrollbar_marks_size)
+
+        # Создать виджет для пометок на скроллбаре
+        self.scrollbar_marks = ScrollbarMarks(self.html_view.verticalScrollBar(), self)
+        self.scrollbar_marks.setParent(self.html_view.verticalScrollBar())
+        self.scrollbar_marks.move(0, 0)
+        self.scrollbar_marks.resize(self.scrollbar_marks.width(), self.html_view.height())
+
+        # Таймер для обработки завершения изменения размера окна
+        self.resize_timer = QTimer(self)
+        self.resize_timer.setSingleShot(True)  # Таймер срабатывает только один раз
+        self.resize_timer.timeout.connect(self.on_resize_finished)  # Подключить обработчик
         
+    def resizeEvent(self, event):
+        """Обновить размеры scrollbar_marks при изменении размеров окна."""
+        super().resizeEvent(event)
+        self.resize_timer.start(200) # Перезапустить таймер (200 мс задержка)
+
+    def on_resize_finished(self):
+        """Обработчик завершения изменения размера окна."""
+        self.update_scrollbar_marks_size()
+        self.update_scrollbar_marks()  # Обновить пометки на скроллбаре
 
     def update_url_input(self, url):
         self.url_input.setText(url.toString())
+
+    def update_scrollbar_marks_size(self):
+        """Обновить размеры scrollbar_marks в соответствии с размерами скроллбара."""
+        scrollbar = self.html_view.verticalScrollBar()
+
+        # Высота кнопок вверх и вниз
+        button_height = scrollbar.style().pixelMetric(scrollbar.style().PM_ScrollBarExtent)
+        
+        # Новая высота scrollbar_marks
+        new_height = scrollbar.height() - 2 * button_height
+
+        # Переместить scrollbar_marks вниз, чтобы исключить верхнюю кнопку
+        self.scrollbar_marks.move(0, button_height)
+
+        # Установить новые размеры
+        self.scrollbar_marks.resize(scrollbar.width(), new_height)
 
     def load_website(self):
         url = self.url_input.text()
@@ -112,6 +152,7 @@ class WebScrapingInterface(QMainWindow):
             self.html_view.setExtraSelections([])  # Убрать все подсветки
             self.search_results = []  # Очистить список результатов
             self.current_search_index = -1  # Сбросить текущий индекс
+            self.scrollbar_marks.set_marks([])  # Очистить метки на скроллбаре
 
     def search_in_html_view(self):
         """Search for text in the HTML view."""
@@ -148,8 +189,9 @@ class WebScrapingInterface(QMainWindow):
                 print(f"Found {len(self.search_results)} occurrences of '{search_query}'")
                 self.current_search_index = 0  # Сбросить индекс на первое вхождение
                 self.move_to_search_result(0)  # Переместиться на первое вхождение 
-        # Обновить пометки на скроллбаре
-        # self.update_scrollbar_marks()
+            # Обновить пометки на скроллбаре
+            self.update_scrollbar_marks()    
+
 
     def move_to_search_result(self, direction):
         """Перемещение между результатами поиска."""
@@ -185,34 +227,69 @@ class WebScrapingInterface(QMainWindow):
         self.html_view.setTextCursor(current_cursor)
         self.html_view.setFocus()
 
-        # Обновить пометки на скроллбаре
-        # self.update_scrollbar_marks()
+
 
         print(f"Moved to occurrence {self.current_search_index + 1} of {len(self.search_results)}")            
 
-    # def update_scrollbar_marks(self):
-    #     """Обновить пометки на скроллбаре для найденных вхождений."""
-    #     scrollbar = self.html_view.verticalScrollBar()
-    #     if not self.search_results:
-    #         # Сбросить стиль, если нет результатов
-    #         scrollbar.setStyleSheet("")
-    #         return
+    def update_scrollbar_marks(self):
+        """Обновить пометки на скроллбаре для найденных вхождений."""
+        if not self.search_results:
+            self.scrollbar_marks.set_marks([])  # Очистить пометки
+            return
 
-    #     # Получить высоту содержимого и скроллбара
-    #     document_height = self.html_view.document().size().height()
-    #     scrollbar_height = scrollbar.height()
+        # Разбить текст на строки с учетом ширины текстового поля
+        document = self.html_view.document()
+        block = document.begin()
+        total_lines = 0  # Общее количество строк в документе
+        line_map = []  # Сопоставление строк с блоками
 
-    #     # Создать список позиций для пометок
-    #     marks = []
-    #     for cursor in self.search_results:
-    #         # Вычислить относительную позицию вхождения
-    #         position = cursor.block().blockNumber() / self.html_view.document().blockCount()
-    #         mark_position = int(position * scrollbar_height)
-    #         marks.append(mark_position)
+        # Получить высоту скроллбара и высоту кнопок
+        scrollbar = self.html_view.verticalScrollBar()
+        scrollbar_height = scrollbar.height()
+        button_height = scrollbar.style().pixelMetric(scrollbar.style().PM_ScrollBarExtent)
 
-    #     # Создать стиль для отображения пометок
-    #     mark_style = ";".join([f"background: yellow; height: 2px; top: {pos}px;" for pos in marks])
-    #     scrollbar.setStyleSheet(f"QScrollBar::sub-page {{ {mark_style} }}")
+        # Вычислить доступную высоту для маркеров
+        available_height = scrollbar_height - 2 * button_height
+
+        while block.isValid():
+            block_layout = block.layout()
+            if block_layout:
+                # Перебираем строки внутри блока
+                for i in range(block_layout.lineCount()):
+                    line = block_layout.lineAt(i)
+                    line_map.append((total_lines, block, line))  # Сохраняем строку, блок и линию
+                    total_lines += 1
+            block = block.next()
+       
+
+        marks = []  # Список для хранения позиций меток
+        line_map_dict = {  # Создаем словарь для быстрого поиска
+            (mapped_block.position(), mapped_line.lineNumber()): line_index
+            for line_index, mapped_block, mapped_line in line_map
+        }
+        # Найти строки, где есть вхождения
+        for cursor in self.search_results:
+            cursor_position = cursor.position()
+            block = document.findBlock(cursor_position)
+            block_layout = block.layout()
+            if block_layout:
+                for i in range(block_layout.lineCount()):
+                    line = block_layout.lineAt(i)
+
+                    # Проверяем, находится ли курсор в пределах строки
+                    line_start = line.textStart()
+                    line_end = line_start + line.textLength()
+                    if line_start <= (cursor_position - block.position()) <= line_end:
+                        # Используем словарь для быстрого поиска индекса строки
+                        key = (block.position(), line.lineNumber())
+                        if key in line_map_dict:
+                            line_index = line_map_dict[key]
+                            relative_position = line_index / total_lines
+                            mark_position = int(relative_position * available_height)
+                            marks.append(mark_position)
+                        break
+        
+        self.scrollbar_marks.set_marks(marks)
 
     def scrape_html(self):
         # url = self.url_input.text()
