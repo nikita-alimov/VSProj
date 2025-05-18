@@ -1,21 +1,24 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QPushButton, QLineEdit, QSizePolicy, QShortcut, QLineEdit, QComboBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QAction, QWidget, QTextEdit, QPushButton, QLineEdit, QSizePolicy, QShortcut, QLineEdit, QComboBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl, QTimer
-from PyQt5.QtGui import QKeySequence, QTextCharFormat, QTextCursor, QColor
+from PyQt5.QtGui import QKeySequence, QTextCursor, QColor
 from bs4 import BeautifulSoup
 import sys
 import requests
+import pandas as pd
 from selenium_test import set_driver  # Импортируем функцию для установки драйвера Selenium
 from ScrollbarMarksWidget import ScrollbarMarks  # Импортируем класс для пометок на скроллбаре
-# from selenium import webdriver
-# from selenium.webdriver.chrome.service import Service
-# from selenium.webdriver.chrome.options import Options
+from DataFrameViewer import DataFrameViewer # Импортируем класс для отображения DataFrame
+
 
 class WebScrapingInterface(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Web Scraping Helper")
         self.setGeometry(100, 100, 1200, 800)
+
+        # Применить стили
+        self.apply_styles()
 
         # Main layout
         layout = QVBoxLayout()
@@ -43,10 +46,10 @@ class WebScrapingInterface(QMainWindow):
         self.web_view.urlChanged.connect(self.update_url_input)
         layout.addWidget(self.web_view)
 
-        # Load button
-        self.load_button = QPushButton("Load Website", self)
-        self.load_button.clicked.connect(self.load_website)
-        layout.addWidget(self.load_button)
+        # # Load button
+        # self.load_button = QPushButton("Load Website", self)
+        # self.load_button.clicked.connect(self.load_website)
+        # layout.addWidget(self.load_button)
 
         # Text area to display HTML source
         self.html_view = QTextEdit(self)
@@ -96,7 +99,7 @@ class WebScrapingInterface(QMainWindow):
         self.filtered_attributes_view = QLineEdit(self)
         self.filtered_attributes_view.setReadOnly(True)
         layout5.addWidget(self.filtered_attributes_view)
-
+      
         # Button to clear the last entry in the filtered tags view
         self.clear_tags_button = QPushButton("Удалить последний тег", self)
         self.clear_tags_button.clicked.connect(self.remove_last_tag)
@@ -109,6 +112,7 @@ class WebScrapingInterface(QMainWindow):
         self.clear_tags_button.setFixedWidth(self.clear_attributes_button.sizeHint().width())
 
 
+
         # Set layout for the main window
         layout3.addLayout(layout)
         layout3.addLayout(layout2)
@@ -119,6 +123,8 @@ class WebScrapingInterface(QMainWindow):
         container.setLayout(layoutFinal)
         self.setCentralWidget(container)
 
+        # Добавляем главное меню
+        self.create_menu()
 
         # Html view search functionality
         self.search_results = []  # Список всех найденных вхождений
@@ -147,10 +153,134 @@ class WebScrapingInterface(QMainWindow):
         self.resize_timer.setSingleShot(True)  # Таймер срабатывает только один раз
         self.resize_timer.timeout.connect(self.on_resize_finished)  # Подключить обработчик
 
-        # Initialize dropdowns
-        # self.tags_dropdown.addItem("Loading...")
-        # self.attributes_dropdown.addItem("Loading...")
-        
+
+    def create_menu(self):
+        """Создать главное меню."""
+        menu_bar = self.menuBar()
+
+        # Добавляем меню "Tools"
+        tools_menu = menu_bar.addMenu("Tools")
+
+        # Добавляем пункт меню "Show DataFrame"
+        show_df_action = QAction("Show DataFrame", self)
+        show_df_action.triggered.connect(self.show_sample_dataframe)
+        tools_menu.addAction(show_df_action)
+
+    def show_sample_dataframe(self):
+        """Показать пример DataFrame в новом окне."""
+        data = {
+            "Tag": ["div", "p", "span"],
+            "Count": [10, 5, 8],
+            "Attributes": ["class, id", "style", "class"]
+        }
+        df = pd.DataFrame(data)
+        self.show_dataframe(df)
+
+    def show_dataframe(self, dataframe):
+        """Открыть новое окно для отображения DataFrame."""
+        self.dataframe_viewer = DataFrameViewer(dataframe)
+        self.dataframe_viewer.show()
+
+    def apply_styles(self):
+        """Применить стили к интерфейсу."""
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+            }
+
+            QLineEdit {
+                background-color: #252526;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+                padding: 4px;
+            }
+
+            QPushButton {
+                background-color: #007acc;
+                color: #ffffff;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+            }
+
+            QPushButton:hover {
+                background-color: #005f9e;
+            }
+
+            QPushButton:pressed {
+                background-color: #004a7c;
+            }
+
+            QTextEdit {
+                background-color: #252526;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+                padding: 4px;
+            }
+
+            QComboBox {
+                background-color: #252526;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+                padding: 4px;
+            }
+
+            QComboBox QAbstractItemView {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                selection-background-color: #007acc;
+            }
+
+            QMenuBar {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+            }
+
+            QMenuBar::item {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+            }
+
+            QMenuBar::item:selected {
+                background-color: #007acc;
+            }
+
+            QMenu {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+            }
+
+            QMenu::item:selected {
+                background-color: #007acc;
+            }
+
+            QScrollBar:vertical {
+                background-color: #1e1e1e;
+                width: 10px;
+                margin: 0px 3px 0px 3px;
+                border: 1px solid #3c3c3c;
+            }
+
+            QScrollBar::handle:vertical {
+                background-color: #007acc;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+
+            QScrollBar::handle:vertical:hover {
+                background-color: #005f9e;
+            }
+
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                background: none;
+            }
+        """)
+
     def resizeEvent(self, event):
         """Обновить размеры scrollbar_marks при изменении размеров окна."""
         super().resizeEvent(event)
@@ -428,6 +558,7 @@ class WebScrapingInterface(QMainWindow):
 
         self.attributes_dropdown.clear()
         self.attributes_dropdown.addItems(sorted(attributes_with_values))
+        self.scrollbar_marks.set_marks([])  # Очистить метки на скроллбаре
 
     def filter_by_tag(self):
         """Фильтровать элементы HTML по выбранному тегу."""
@@ -441,7 +572,13 @@ class WebScrapingInterface(QMainWindow):
         # Получить текущий выбранный тег из выпадающего меню
         selected_tag = self.tags_dropdown.currentText()
         if selected_tag:
-            filtered_elements = soup.find_all(selected_tag)
+            # Найти только верхнеуровневые элементы
+            filtered_elements = []
+            for element in soup.find_all(selected_tag):
+                # Проверяем, является ли элемент вложенным
+                if not element.find_parent(selected_tag):
+                    filtered_elements.append(element)
+
             soup = BeautifulSoup("\n".join(str(element) for element in filtered_elements), 'html.parser')
             self.html_view.setPlainText(self.display_pretty_html(str(soup)))
             if current_text:
@@ -496,9 +633,12 @@ class WebScrapingInterface(QMainWindow):
 
         # Фильтровать по тегам
         if tags:
-            filtered_elements = []
             for tag in tags:
-                filtered_elements = soup.find_all(tag)
+                filtered_elements = []
+                for element in soup.find_all(tag):
+                    # Проверяем, является ли элемент вложенным
+                    if not element.find_parent(tag):
+                        filtered_elements.append(element)    
                 soup = BeautifulSoup("\n".join(str(element) for element in filtered_elements), 'html.parser')
             
 
