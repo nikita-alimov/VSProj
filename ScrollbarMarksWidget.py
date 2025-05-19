@@ -28,7 +28,7 @@ class ScrollbarMarks(QWidget):
         painter.setBrush(QColor(255, 255, 0, 128))  # Полупрозрачный желтый цвет
 
         for mark in self.marks:
-            rect = QRect(0, mark, self.width(), 1)  # Прямоугольник для каждой пометки
+            rect = QRect(3, mark, self.width(), 1)  # Прямоугольник для каждой пометки
             painter.drawRect(rect)
 
         painter.end()

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QAction, QWidget, QTextEdit, QPushButton, QLineEdit, QSizePolicy, QShortcut, QLineEdit, QComboBox
+from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox, QMainWindow, QVBoxLayout, QHBoxLayout, QAction, QWidget, QTextEdit, QPushButton, QLineEdit, QSizePolicy, QShortcut, QLineEdit, QComboBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl, QTimer
 from PyQt5.QtGui import QKeySequence, QTextCursor, QColor
@@ -9,6 +9,7 @@ import pandas as pd
 from selenium_test import set_driver  # Импортируем функцию для установки драйвера Selenium
 from ScrollbarMarksWidget import ScrollbarMarks  # Импортируем класс для пометок на скроллбаре
 from DataFrameViewer import DataFrameViewer # Импортируем класс для отображения DataFrame
+from FieldInputDialog import SliceInputDialog
 
 
 class WebScrapingInterface(QMainWindow):
@@ -26,6 +27,7 @@ class WebScrapingInterface(QMainWindow):
         layout3 = QHBoxLayout()
         layout4 = QHBoxLayout()
         layout5 = QHBoxLayout()
+        layout6 = QVBoxLayout()
         layoutFinal = QVBoxLayout()
 
         # URL input field
@@ -72,13 +74,20 @@ class WebScrapingInterface(QMainWindow):
         self.scrape_button.clicked.connect(self.scrape_html)
         layout2.addWidget(self.scrape_button)
 
+        # Добавить кнопку для извлечения данных
+        self.extract_data_button = QPushButton("Извлечь данные", self)
+        self.extract_data_button.clicked.connect(self.extract_data)
+        layout2.addWidget(self.extract_data_button)
+
         self.fetch_button = QPushButton("Fetch HTML (Direct)", self)
         self.fetch_button.clicked.connect(self.fetch_html)
+        self.fetch_button.hide()
         layout2.addWidget(self.fetch_button)
 
         # Selenium Scrape button
         self.selenium_scrape_button = QPushButton("Scrape HTML (Selenium)", self)
         self.selenium_scrape_button.clicked.connect(self.selenium_scrape_html)
+        self.selenium_scrape_button.hide()
         layout2.addWidget(self.selenium_scrape_button)
 
         # Dropdown menus for tags and attributes
@@ -87,9 +96,15 @@ class WebScrapingInterface(QMainWindow):
         layout4.addWidget(self.tags_dropdown)
 
         self.attributes_dropdown = QComboBox(self)
-        self.attributes_dropdown.setPlaceholderText("Select an attribute")
-        layout5.addWidget(self.attributes_dropdown)
+        self.attributes_dropdown.setPlaceholderText("Select an attribute with value")
+        layout6.addWidget(self.attributes_dropdown)
         self.tags_dropdown.setFixedWidth(self.attributes_dropdown.sizeHint().width())
+
+        self.attributes_dropdown_without_value = QComboBox(self)
+        self.attributes_dropdown_without_value.setPlaceholderText("Select an attribute")
+        layout6.addWidget(self.attributes_dropdown_without_value)
+        self.attributes_dropdown_without_value.setFixedWidth(self.attributes_dropdown.sizeHint().width())
+        layout5.addLayout(layout6)
 
         # Поля для отображения текущих фильтров
         self.filtered_tags_view = QLineEdit(self)
@@ -138,6 +153,7 @@ class WebScrapingInterface(QMainWindow):
 
         self.tags_dropdown.activated.connect(self.filter_by_tag)
         self.attributes_dropdown.activated.connect(self.filter_by_attribute)
+        self.attributes_dropdown_without_value.activated.connect(self.filter_by_attribute)
 
         # Подключить сигнал contentsChanged к методу обновления размеров scrollbar_marks
         self.html_view.document().contentsChanged.connect(self.update_scrollbar_marks_size)
@@ -163,22 +179,129 @@ class WebScrapingInterface(QMainWindow):
 
         # Добавляем пункт меню "Show DataFrame"
         show_df_action = QAction("Show DataFrame", self)
-        show_df_action.triggered.connect(self.show_sample_dataframe)
+        show_df_action.triggered.connect(self.show_dataframe)
         tools_menu.addAction(show_df_action)
 
-    def show_sample_dataframe(self):
-        """Показать пример DataFrame в новом окне."""
-        data = {
-            "Tag": ["div", "p", "span"],
-            "Count": [10, 5, 8],
-            "Attributes": ["class, id", "style", "class"]
-        }
-        df = pd.DataFrame(data)
-        self.show_dataframe(df)
+    def extract_data(self):
+        """Извлечь данные по текущим фильтрам и сохранить в DataFrame."""
+        # Получить текущий HTML из html_view
+        html = self.html_view.toPlainText()
+        soup = BeautifulSoup(html, 'html.parser')
 
-    def show_dataframe(self, dataframe):
+        # Извлечь текст всех элементов
+        all_data = [element.get_text(strip=True) for element in soup.find_all()]
+
+        # Показать диалог для ввода параметров
+        dialog = SliceInputDialog(len(all_data) - 1, self)
+        if dialog.exec_() == QDialog.Accepted:
+            start, end, field_name = dialog.get_values()
+
+            # Проверить корректность диапазона
+            if start > end:
+                QMessageBox.warning(self, "Ошибка", "Начальная строка не может быть больше конечной.")
+                return
+
+            # Проверить, введено ли имя поля
+            if not field_name.strip():
+                QMessageBox.warning(self, "Ошибка", "Название поля не может быть пустым.")
+                return
+
+        # # Запросить у пользователя диапазон строк
+        # start, ok_start = QInputDialog.getInt(self, "Введите начало среза", "Начальная строка (0-based):", 0, 0, len(all_data) - 1)
+        # if not ok_start:
+        #     return  # Пользователь отменил ввод
+
+        # end, ok_end = QInputDialog.getInt(self, "Введите конец среза", "Конечная строка (0-based, включительно):", start, start, len(all_data) - 1)
+        # if not ok_end:
+        #     return  # Пользователь отменил ввод
+
+        # # Убедиться, что диапазон корректен
+        # if start > end:
+        #     QMessageBox.warning(self, "Ошибка", "Начальная строка не может быть больше конечной.")
+        #     return
+
+        # Взять срез данных
+            extracted_data = all_data[start:end + 1]
+
+            # Запросить у пользователя название поля
+            # field_name, ok = QInputDialog.getText(self, "Введите название поля", "Название поля для сохранения данных:")
+            # if not ok or not field_name.strip():
+            #     return  # Пользователь отменил ввод
+
+            field_name = field_name.strip()
+
+            # Проверить, существует ли поле в DataFrame
+            if hasattr(self, 'dataframe'):
+                if field_name in self.dataframe.columns:
+                    # Если поле существует, предложить варианты действий
+                    actions = ["Перезаписать данные", "Дополнить данные"]
+                    action, ok = QInputDialog.getItem(
+                        self,
+                        "Поле уже существует",
+                        f"Поле '{field_name}' уже существует. Выберите действие:",
+                        actions,
+                        editable=False
+                    )
+                    if action == "Перезаписать данные":
+                        # Проверить соответствие размеров
+                        if len(self.dataframe) != len(extracted_data):
+                            QMessageBox.warning(
+                                self,
+                                "Ошибка изменения данных",
+                                "Количество строк в новых данных не совпадает с количеством строк в DataFrame. "
+                                "Перезапись невозможна."
+                            )
+                            return
+                        # Перезаписать данные
+                        self.dataframe[field_name] = extracted_data
+                    elif action == "Дополнить данные":
+                        # Проверить соответствие размеров
+                        if len(self.dataframe) != len(extracted_data) + len(self.dataframe):
+                            QMessageBox.warning(
+                                self,
+                                "Ошибка дополнения данных",
+                                "Количество строк в новых данных не совпадает с количеством строк в DataFrame. "
+                                "Дополнение невозможно."
+                            )
+                            return
+                        # Дополнить данные
+                        self.dataframe[field_name] = self.dataframe[field_name].tolist() + extracted_data
+                else:
+                    # Проверить соответствие размеров для нового поля
+                    if len(self.dataframe) != len(extracted_data):
+                        QMessageBox.warning(
+                            self,
+                            "Ошибка добавления нового поля",
+                            "Количество строк в новых данных не совпадает с количеством строк в DataFrame. "
+                            "Добавление нового поля невозможно."
+                        )
+                        return
+                    # Добавить новое поле
+                    self.dataframe[field_name] = extracted_data
+            else:
+                # Создать новый DataFrame, если он не существует
+                self.dataframe = pd.DataFrame({field_name: extracted_data})
+
+            # Установить обновленный DataFrame в DataFrameViewer
+            self.set_dataframe(self.dataframe)
+
+    def set_dataframe (self, dataframe):
+        if hasattr(self, 'dataframe_viewer'):
+            # If the DataFrameViewer already exists, update its DataFrame
+            self.dataframe_viewer.update_dataframe(dataframe)
+        else:
+            # Otherwise, create a new DataFrameViewer
+            self.dataframe_viewer = DataFrameViewer(dataframe)
+
+    def show_dataframe(self):
         """Открыть новое окно для отображения DataFrame."""
-        self.dataframe_viewer = DataFrameViewer(dataframe)
+        # self.dataframe_viewer = DataFrameViewer(dataframe)
+        if not hasattr(self, 'dataframe_viewer'):
+            self.dataframe_viewer = DataFrameViewer(pd.DataFrame())
+        # if hasattr(self, 'dataframe_viewer') and self.dataframe_viewer.isVisible():
+        #     # Закрыть существующее окно перед обновлением
+        #     self.dataframe_viewer.close()
+
         self.dataframe_viewer.show()
 
     def apply_styles(self):
@@ -260,24 +383,44 @@ class WebScrapingInterface(QMainWindow):
             }
 
             QScrollBar:vertical {
-                background-color: #1e1e1e;
-                width: 10px;
-                margin: 0px 3px 0px 3px;
-                border: 1px solid #3c3c3c;
+            background-color: #2d2d2d;
+            width: 14px;  
+            margin: 0px 3px 0px 3px;
+            border: none;
             }
 
             QScrollBar::handle:vertical {
-                background-color: #007acc;
-                min-height: 20px;
-                border-radius: 4px;
+                background-color: #5a5a5a;  
+                min-height: 14px;
+                border-radius: 7px;  
+                margin-top: 14px;  /* Отступ сверху для верхней кнопки */
+                margin-bottom: 14px;  /* Отступ снизу для нижней кнопки */
             }
 
             QScrollBar::handle:vertical:hover {
-                background-color: #005f9e;
+                background-color: #787878;  
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                background-color: #3c3c3c;  /* Темный фон для кнопок */
+                height: 14px;  /* Высота кнопок */
+                subcontrol-origin: margin;
+                border-radius: 1px;  /* Закругленные края */
             }
 
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                background: none;
+            QScrollBar::add-line:vertical {
+                subcontrol-position: bottom;  /* Позиция кнопки вниз */
+            }
+
+            QScrollBar::sub-line:vertical {
+                subcontrol-position: top;  /* Позиция кнопки вверх */
+            }
+
+            QScrollBar::add-line:vertical:hover, QScrollBar::sub-line:vertical:hover {
+                background-color: #5a5a5a;  /* Более светлый серый при наведении */
+            }
+
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;  /* Убираем фон между ползунком и краями */
             }
         """)
 
@@ -316,7 +459,7 @@ class WebScrapingInterface(QMainWindow):
 
         # Высота кнопок вверх и вниз
         button_height = scrollbar.style().pixelMetric(scrollbar.style().PM_ScrollBarExtent)
-        
+                
         # Новая высота scrollbar_marks
         new_height = scrollbar.height() - 2 * button_height
 
@@ -548,6 +691,7 @@ class WebScrapingInterface(QMainWindow):
 
         # Извлечь все уникальные атрибуты с их значениями
         attributes_with_values = set()
+        attributes_without_value = set()
         for tag in soup.find_all():
             for attr, value in tag.attrs.items():
                 # Добавить атрибуты в формате "атрибут=значение"
@@ -556,8 +700,13 @@ class WebScrapingInterface(QMainWindow):
                 else:
                     attributes_with_values.add(f"{attr}={value}")
 
+            for attr in tag.attrs.keys():
+                attributes_without_value.add(attr)  # Добавить атрибуты без значений
+
         self.attributes_dropdown.clear()
         self.attributes_dropdown.addItems(sorted(attributes_with_values))
+        self.attributes_dropdown_without_value.clear()
+        self.attributes_dropdown_without_value.addItems(sorted(attributes_without_value))
         self.scrollbar_marks.set_marks([])  # Очистить метки на скроллбаре
 
     def filter_by_tag(self):
@@ -593,7 +742,7 @@ class WebScrapingInterface(QMainWindow):
         """Фильтровать элементы HTML по выбранному атрибуту."""
         # Обновить текстовое поле с текущими атрибутами      
         current_text = self.filtered_attributes_view.text()
-        selected_attribute_value = self.attributes_dropdown.currentText()
+        selected_attribute_value = self.attributes_dropdown.currentText() or self.attributes_dropdown_without_value.currentText()
         if selected_attribute_value in current_text.split(";"):
             return
         

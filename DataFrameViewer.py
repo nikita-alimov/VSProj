@@ -13,6 +13,7 @@ class DataFrameViewer(QMainWindow):
         self.model = PandasModel(dataframe)
         self.table.setModel(self.model)
 
+
         # Устанавливаем макет
         layout = QVBoxLayout()
         layout.addWidget(self.table)
@@ -20,6 +21,9 @@ class DataFrameViewer(QMainWindow):
         container.setLayout(layout)
         self.setCentralWidget(container)
 
+    def update_dataframe(self, new_dataframe):
+        self.model = PandasModel(new_dataframe)
+        self.table.setModel(self.model)
 
 class PandasModel(QAbstractTableModel):
     def __init__(self, data):
