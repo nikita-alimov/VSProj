@@ -1,4 +1,5 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QDialogButtonBox, QLabel, QSpinBox
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLineEdit, QDialogButtonBox, QLabel, QSpinBox, QRadioButton, QButtonGroup
+from PyQt5.QtWidgets import QComboBox
 
 class SliceInputDialog(QDialog):
     def __init__(self, max_index, parent=None):
@@ -8,6 +9,34 @@ class SliceInputDialog(QDialog):
         # Макет диалога
         layout = QVBoxLayout(self)
 
+        # Поле для ввода названия тега (необязательно)
+        self.tag_label = QLabel("Название тега из которого нужно извлеч данные (необязательно):", self)
+        self.tag_input = QComboBox(self)
+        layout.addWidget(self.tag_label)
+        layout.addWidget(self.tag_input)
+
+        # Поле для ввода названия атрибута (необязательно)
+        self.attribute_label = QLabel("Название атрибута из которого нужно извлеч данные (необязательно):", self)
+        self.attribute_input = QComboBox(self)
+        layout.addWidget(self.attribute_label)
+        layout.addWidget(self.attribute_input)
+
+        # Радиокнопки для выбора способа извлечения данных
+        self.extract_mode_label = QLabel("Выберите способ извлечения данных:", self)
+        layout.addWidget(self.extract_mode_label)
+
+        self.extract_mode_group = QButtonGroup(self)  # Создаем группу для радиокнопок
+
+        self.extract_text_radio = QRadioButton("Извлекать текст между тегами", self)
+        self.extract_attribute_radio = QRadioButton("Извлекать значение атрибута", self)
+        self.extract_text_radio.setChecked(True)  # Установить вариант по умолчанию
+
+        self.extract_mode_group.addButton(self.extract_text_radio)
+        self.extract_mode_group.addButton(self.extract_attribute_radio)
+
+        layout.addWidget(self.extract_text_radio)
+        layout.addWidget(self.extract_attribute_radio)
+        
         # Поле для ввода начала среза
         self.start_label = QLabel("Начальная строка (0-based):", self)
         self.start_input = QSpinBox(self)
@@ -37,4 +66,4 @@ class SliceInputDialog(QDialog):
 
     def get_values(self):
         """Возвращает значения, введенные пользователем."""
-        return self.start_input.value(), self.end_input.value(), self.field_input.text()
+        return self.tag_input.currentText(), self.attribute_input.currentText(), self.start_input.value(), self.end_input.value(), self.field_input.text()

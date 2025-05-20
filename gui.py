@@ -188,13 +188,50 @@ class WebScrapingInterface(QMainWindow):
         html = self.html_view.toPlainText()
         soup = BeautifulSoup(html, 'html.parser')
 
+        if hasattr(self, 'dataframe') and self.dataframe.empty:
+            del self.dataframe
+
         # Извлечь текст всех элементов
         all_data = [element.get_text(strip=True) for element in soup.find_all()]
-
         # Показать диалог для ввода параметров
         dialog = SliceInputDialog(len(all_data) - 1, self)
+        dialog.attribute_input.clear()
+        dialog.attribute_input.addItem("")
+        dialog.attribute_input.addItems([self.attributes_dropdown_without_value.itemText(i) for i in range(self.attributes_dropdown_without_value.count())])
+        dialog.tag_input.clear()
+        dialog.tag_input.addItem("")
+        dialog.tag_input.addItems([self.tags_dropdown.itemText(i) for i in range(self.tags_dropdown.count())])
         if dialog.exec_() == QDialog.Accepted:
-            start, end, field_name = dialog.get_values()
+            # Check if a specific attribute is selected in FieldInputDialog
+            selected_tag, selected_attribute, start, end, field_name = dialog.get_values()
+            # Check if the user wants to extract text between tags
+            if dialog.extract_text_radio.isChecked():
+                # Extract text between the selected tags
+                if selected_tag:
+                    if selected_attribute:
+                        all_data = [
+                            element.get_text(strip=True)
+                            for element in soup.find_all(selected_tag)
+                            if element.has_attr(selected_attribute)
+                        ]
+                    else:
+                        all_data = [element.get_text(strip=True) for element in soup.find_all(selected_tag)]
+                elif selected_attribute:
+                    all_data = [
+                        element.get_text(strip=True)
+                        for element in soup.find_all()
+                        if element.has_attr(selected_attribute)
+                    ]
+
+            else:
+                if not selected_attribute:
+                    QMessageBox.warning(self, "Ошибка", "Выберите атрибут для извлечения.")
+                    return
+                if not selected_tag:
+                    # Extract the values of the selected attribute
+                    all_data = [element.get(selected_attribute, "").strip() for element in soup.find_all()]
+                else:
+                    all_data = [element.get(selected_attribute, "").strip() for element in soup.find_all(selected_tag)]    
 
             # Проверить корректность диапазона
             if start > end:
@@ -244,38 +281,124 @@ class WebScrapingInterface(QMainWindow):
                     )
                     if action == "Перезаписать данные":
                         # Проверить соответствие размеров
-                        if len(self.dataframe) != len(extracted_data):
-                            QMessageBox.warning(
-                                self,
-                                "Ошибка изменения данных",
-                                "Количество строк в новых данных не совпадает с количеством строк в DataFrame. "
-                                "Перезапись невозможна."
-                            )
-                            return
-                        # Перезаписать данные
-                        self.dataframe[field_name] = extracted_data
+                        if len(self.dataframe.columns) == 1:
+                            del self.dataframe
+                            self.dataframe = pd.DataFrame({field_name: extracted_data})
+
+                        elif len(self.dataframe) != len(extracted_data):
+                            if len(extracted_data) > len(self.dataframe):
+                                # Спросить у пользователя, хочет ли он обрезать данные
+                                reply = QMessageBox.question(
+                                    self,
+                                    "Обрезать данные?",
+                                    "Количество строк в новых данных больше, чем в DataFrame. "
+                                    "Хотите обрезать данные до размера DataFrame?",
+                                    QMessageBox.Yes | QMessageBox.No,
+                                    QMessageBox.No
+                                )
+                                if reply == QMessageBox.Yes:
+                                    # Обрезать extracted_data до размера DataFrame
+                                    extracted_data = extracted_data[:len(self.dataframe)]
+                                else:
+                                    return
+                            else:
+                                # Спросить у пользователя, хочет ли он дополнить данные
+                                reply = QMessageBox.question(
+                                    self,
+                                    "Дополнить данные?",
+                                    "Количество строк в новых данных меньше, чем в DataFrame. "
+                                    "Хотите дополнить данные значениями NaN?",
+                                    QMessageBox.Yes | QMessageBox.No,
+                                    QMessageBox.No
+                                )
+                                if reply == QMessageBox.Yes:
+                                    # Дополнить extracted_data значениями NaN до размера DataFrame
+                                    extracted_data.extend([float('nan')] * (len(self.dataframe) - len(extracted_data)))
+                                else:
+                                    return    
+                                # Перезаписать данные
+                            self.dataframe[field_name] = extracted_data
+
                     elif action == "Дополнить данные":
-                        # Проверить соответствие размеров
-                        if len(self.dataframe) != len(extracted_data) + len(self.dataframe):
-                            QMessageBox.warning(
-                                self,
-                                "Ошибка дополнения данных",
-                                "Количество строк в новых данных не совпадает с количеством строк в DataFrame. "
-                                "Дополнение невозможно."
-                            )
-                            return
-                        # Дополнить данные
-                        self.dataframe[field_name] = self.dataframe[field_name].tolist() + extracted_data
+                        if len(self.dataframe.columns) == 1:
+                            current_data = self.dataframe[field_name].tolist()
+                            new_data = current_data + extracted_data
+                            del self.dataframe
+                            self.dataframe = pd.DataFrame({field_name: new_data})
+                        else:    
+                            # Удалить значения NaN из дополняемой колонки
+                            existing_data = self.dataframe[field_name].dropna().tolist()
+                            # Попытаться дополнить колонку новыми данными
+                            updated_column = existing_data + extracted_data    
+                            
+                            # Проверить соответствие размеров
+                            if len(updated_column) != len(self.dataframe):
+                                if len(updated_column) > len(self.dataframe):
+                                    # Спросить у пользователя, хочет ли он обрезать данные
+                                    reply = QMessageBox.question(
+                                        self,
+                                        "Обрезать данные?",
+                                        "Количество строк в новых данных больше, чем в DataFrame. "
+                                        "Хотите обрезать данные до размера DataFrame?",
+                                        QMessageBox.Yes | QMessageBox.No,
+                                        QMessageBox.No
+                                    )
+                                    if reply == QMessageBox.Yes:
+                                        # Обрезать updated_column до размера DataFrame
+                                        updated_column = updated_column[:len(self.dataframe)]
+                                    else:
+                                        return
+                                else:
+                                    # Спросить у пользователя, хочет ли он дополнить данные
+                                    reply = QMessageBox.question(
+                                        self,
+                                        "Дополнить данные?",
+                                        "Количество строк в новых данных меньше, чем в DataFrame. "
+                                        "Хотите дополнить данные значениями NaN?",
+                                        QMessageBox.Yes | QMessageBox.No,
+                                        QMessageBox.No
+                                    )
+                                    if reply == QMessageBox.Yes:
+                                        # Дополнить updated_column значениями NaN до размера DataFrame
+                                        updated_column.extend([float('nan')] * (len(self.dataframe) - len(updated_column)))
+                                    else:
+                                        return
+
+                            # Установить обновленную колонку в DataFrame
+                            self.dataframe[field_name] = updated_column
                 else:
                     # Проверить соответствие размеров для нового поля
                     if len(self.dataframe) != len(extracted_data):
-                        QMessageBox.warning(
-                            self,
-                            "Ошибка добавления нового поля",
-                            "Количество строк в новых данных не совпадает с количеством строк в DataFrame. "
-                            "Добавление нового поля невозможно."
-                        )
-                        return
+                        if len(extracted_data) > len(self.dataframe):
+                            # Спросить у пользователя, хочет ли он обрезать данные
+                            reply = QMessageBox.question(
+                                self,
+                                "Обрезать данные?",
+                                "Количество строк в новых данных больше, чем в DataFrame. "
+                                "Хотите обрезать данные до размера DataFrame?",
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No
+                            )
+                            if reply == QMessageBox.Yes:
+                                # Обрезать extracted_data до размера DataFrame
+                                extracted_data = extracted_data[:len(self.dataframe)]
+                            else:
+                                return
+                        else:
+                            # Спросить у пользователя, хочет ли он дополнить данные
+                            reply = QMessageBox.question(
+                                self,
+                                "Дополнить данные?",
+                                "Количество строк в новых данных меньше, чем в DataFrame. "
+                                "Хотите дополнить данные значениями NaN?",
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No
+                            )
+                            if reply == QMessageBox.Yes:
+                                # Дополнить extracted_data значениями NaN до размера DataFrame
+                                extracted_data.extend([float('nan')] * (len(self.dataframe) - len(extracted_data)))
+                            else:
+                                return
                     # Добавить новое поле
                     self.dataframe[field_name] = extracted_data
             else:
@@ -663,7 +786,6 @@ class WebScrapingInterface(QMainWindow):
             except requests.exceptions.RequestException as e:
                 print(f"Error fetching URL: {e}")    
 
-    # Selenium Scrape button
     def selenium_scrape_html(self):
         url = self.url_input.text()
         if url:
