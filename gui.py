@@ -10,6 +10,7 @@ from selenium_test import set_driver  # Импортируем функцию д
 from ScrollbarMarksWidget import ScrollbarMarks  # Импортируем класс для пометок на скроллбаре
 from DataFrameViewer import DataFrameViewer # Импортируем класс для отображения DataFrame
 from FieldInputDialog import SliceInputDialog
+from ParseLinksDialog import ParseLinksDialog  # Импортируем класс для отображения ссылок
 
 
 class WebScrapingInterface(QMainWindow):
@@ -78,6 +79,10 @@ class WebScrapingInterface(QMainWindow):
         self.extract_data_button = QPushButton("Извлечь данные", self)
         self.extract_data_button.clicked.connect(self.extract_data)
         layout2.addWidget(self.extract_data_button)
+
+        self.parse_links_button = QPushButton("Парсить ссылки", self)
+        self.parse_links_button.clicked.connect(self.parse_links)
+        layout2.addWidget(self.parse_links_button)
 
         self.fetch_button = QPushButton("Fetch HTML (Direct)", self)
         self.fetch_button.clicked.connect(self.fetch_html)
@@ -182,66 +187,106 @@ class WebScrapingInterface(QMainWindow):
         show_df_action.triggered.connect(self.show_dataframe)
         tools_menu.addAction(show_df_action)
 
+    def parse_links(self):
+        """Извлечь ссылки с сайта и сгруппировать их по парам тег-атрибут."""
+        html = self.html_view.toPlainText()
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Словарь для хранения ссылок, сгруппированных по тегам и атрибутам
+        links_by_tag_attribute = {}
+
+        # Перебираем все теги с атрибутами, содержащими ссылки
+        base_url = self.url_input.text()  # Получаем базовый URL из строки ввода
+
+        for tag in soup.find_all():
+            for attr, value in tag.attrs.items():
+                if isinstance(value, str):
+                    # Проверяем, является ли ссылка абсолютной или относительной
+                    if value.startswith("http://") or value.startswith("https://"):
+                        # Абсолютная ссылка
+                        key = f"{tag.name}[{attr}]"
+                        if key not in links_by_tag_attribute:
+                            links_by_tag_attribute[key] = []
+                        links_by_tag_attribute[key].append(value)
+                    elif value.startswith("/"):
+                        # Относительная ссылка
+                        absolute_url = QUrl(base_url).resolved(QUrl(value)).toString()
+                        key = f"{tag.name}[{attr}]"
+                        if key not in links_by_tag_attribute:
+                            links_by_tag_attribute[key] = []
+                        links_by_tag_attribute[key].append(absolute_url)
+
+        # # Выводим результат в консоль (или обрабатываем дальше)
+        # for key, links in links_by_tag_attribute.items():
+        #     print(f"{key}:")
+        #     for link in links:
+        #         print(f"  {link}")
+            # Открыть диалог для отображения ссылок
+        dialog = ParseLinksDialog(links_by_tag_attribute, self)
+        dialog.exec_()
+
+        # return links_by_tag_attribute
+    
     def extract_data(self):
         """Извлечь данные по текущим фильтрам и сохранить в DataFrame."""
         # Получить текущий HTML из html_view
         html = self.html_view.toPlainText()
-        soup = BeautifulSoup(html, 'html.parser')
+        # soup = BeautifulSoup(html, 'html.parser')
 
         if hasattr(self, 'dataframe') and self.dataframe.empty:
             del self.dataframe
 
         # Извлечь текст всех элементов
-        all_data = [element.get_text(strip=True) for element in soup.find_all()]
+        # all_data = [element.get_text(strip=True) for element in soup.find_all()]
         # Показать диалог для ввода параметров
-        dialog = SliceInputDialog(len(all_data) - 1, self)
-        dialog.attribute_input.clear()
-        dialog.attribute_input.addItem("")
-        dialog.attribute_input.addItems([self.attributes_dropdown_without_value.itemText(i) for i in range(self.attributes_dropdown_without_value.count())])
-        dialog.tag_input.clear()
-        dialog.tag_input.addItem("")
-        dialog.tag_input.addItems([self.tags_dropdown.itemText(i) for i in range(self.tags_dropdown.count())])
+        dialog = SliceInputDialog(html, self)
+        # dialog.attribute_input.clear()
+        # dialog.attribute_input.addItem("")
+        # dialog.attribute_input.addItems([self.attributes_dropdown_without_value.itemText(i) for i in range(self.attributes_dropdown_without_value.count())])
+        # dialog.tag_input.clear()
+        # dialog.tag_input.addItem("")
+        # dialog.tag_input.addItems([self.tags_dropdown.itemText(i) for i in range(self.tags_dropdown.count())])
         if dialog.exec_() == QDialog.Accepted:
             # Check if a specific attribute is selected in FieldInputDialog
-            selected_tag, selected_attribute, start, end, field_name = dialog.get_values()
+            all_data, start, end, field_name = dialog.get_values()
             # Check if the user wants to extract text between tags
-            if dialog.extract_text_radio.isChecked():
-                # Extract text between the selected tags
-                if selected_tag:
-                    if selected_attribute:
-                        all_data = [
-                            element.get_text(strip=True)
-                            for element in soup.find_all(selected_tag)
-                            if element.has_attr(selected_attribute)
-                        ]
-                    else:
-                        all_data = [element.get_text(strip=True) for element in soup.find_all(selected_tag)]
-                elif selected_attribute:
-                    all_data = [
-                        element.get_text(strip=True)
-                        for element in soup.find_all()
-                        if element.has_attr(selected_attribute)
-                    ]
+            # if dialog.extract_text_radio.isChecked():
+            #     # Extract text between the selected tags
+            #     if selected_tag:
+            #         if selected_attribute:
+            #             all_data = [
+            #                 element.get_text(strip=True)
+            #                 for element in soup.find_all(selected_tag)
+            #                 if element.has_attr(selected_attribute)
+            #             ]
+            #         else:
+            #             all_data = [element.get_text(strip=True) for element in soup.find_all(selected_tag)]
+            #     elif selected_attribute:
+            #         all_data = [
+            #             element.get_text(strip=True)
+            #             for element in soup.find_all()
+            #             if element.has_attr(selected_attribute)
+            #         ]
 
-            else:
-                if not selected_attribute:
-                    QMessageBox.warning(self, "Ошибка", "Выберите атрибут для извлечения.")
-                    return
-                if not selected_tag:
-                    # Extract the values of the selected attribute
-                    all_data = [element.get(selected_attribute, "").strip() for element in soup.find_all()]
-                else:
-                    all_data = [element.get(selected_attribute, "").strip() for element in soup.find_all(selected_tag)]    
+            # else:
+            #     if not selected_attribute:
+            #         QMessageBox.warning(self, "Ошибка", "Выберите атрибут для извлечения.")
+            #         return
+            #     if not selected_tag:
+            #         # Extract the values of the selected attribute
+            #         all_data = [element.get(selected_attribute, "").strip() for element in soup.find_all()]
+            #     else:
+            #         all_data = [element.get(selected_attribute, "").strip() for element in soup.find_all(selected_tag)]    
 
             # Проверить корректность диапазона
-            if start > end:
-                QMessageBox.warning(self, "Ошибка", "Начальная строка не может быть больше конечной.")
-                return
+            # if start > end:
+            #     QMessageBox.warning(self, "Ошибка", "Начальная строка не может быть больше конечной.")
+            #     return
 
-            # Проверить, введено ли имя поля
-            if not field_name.strip():
-                QMessageBox.warning(self, "Ошибка", "Название поля не может быть пустым.")
-                return
+            # # Проверить, введено ли имя поля
+            # if not field_name.strip():
+            #     QMessageBox.warning(self, "Ошибка", "Название поля не может быть пустым.")
+            #     return
 
         # # Запросить у пользователя диапазон строк
         # start, ok_start = QInputDialog.getInt(self, "Введите начало среза", "Начальная строка (0-based):", 0, 0, len(all_data) - 1)
@@ -287,20 +332,34 @@ class WebScrapingInterface(QMainWindow):
 
                         elif len(self.dataframe) != len(extracted_data):
                             if len(extracted_data) > len(self.dataframe):
-                                # Спросить у пользователя, хочет ли он обрезать данные
-                                reply = QMessageBox.question(
+                                # Спросить у пользователя, хочет ли он обрезать данные или дополнить другие колонки NaN
+                                actions = ["Обрезать данные", "Дополнить другие колонки значениями NaN"]
+                                action, ok = QInputDialog.getItem(
                                     self,
-                                    "Обрезать данные?",
+                                    "Обрезать или дополнить данные?",
                                     "Количество строк в новых данных больше, чем в DataFrame. "
-                                    "Хотите обрезать данные до размера DataFrame?",
-                                    QMessageBox.Yes | QMessageBox.No,
-                                    QMessageBox.No
+                                    "Выберите действие:",
+                                    actions,
+                                    editable=False
                                 )
-                                if reply == QMessageBox.Yes:
+                                if not ok:
+                                    return  # Пользователь отменил ввод
+
+                                if action == "Обрезать данные":
                                     # Обрезать extracted_data до размера DataFrame
                                     extracted_data = extracted_data[:len(self.dataframe)]
-                                else:
-                                    return
+                                elif action == "Дополнить другие колонки значениями NaN":
+                                    # Извлечь все старые колонки и дополнить их до новой размерности
+                                    old_columns = {column: self.dataframe[column].tolist() for column in self.dataframe.columns}
+                                    for column in old_columns:
+                                        old_columns[column].extend([float('nan')] * (len(extracted_data) - len(self.dataframe)))
+
+                                    # Добавить новую колонку с извлеченными данными
+                                    old_columns[field_name] = extracted_data
+
+                                    # Удалить старый DataFrame и создать новый с дополненными колонками
+                                    del self.dataframe
+                                    self.dataframe = pd.DataFrame(old_columns)
                             else:
                                 # Спросить у пользователя, хочет ли он дополнить данные
                                 reply = QMessageBox.question(
@@ -315,7 +374,7 @@ class WebScrapingInterface(QMainWindow):
                                     # Дополнить extracted_data значениями NaN до размера DataFrame
                                     extracted_data.extend([float('nan')] * (len(self.dataframe) - len(extracted_data)))
                                 else:
-                                    return    
+                                    return
                                 # Перезаписать данные
                             self.dataframe[field_name] = extracted_data
 
@@ -334,20 +393,34 @@ class WebScrapingInterface(QMainWindow):
                             # Проверить соответствие размеров
                             if len(updated_column) != len(self.dataframe):
                                 if len(updated_column) > len(self.dataframe):
-                                    # Спросить у пользователя, хочет ли он обрезать данные
-                                    reply = QMessageBox.question(
+                                    # Спросить у пользователя, хочет ли он обрезать данные или дополнить другие колонки NaN
+                                    actions = ["Обрезать данные", "Дополнить другие колонки значениями NaN"]
+                                    action, ok = QInputDialog.getItem(
                                         self,
-                                        "Обрезать данные?",
+                                        "Обрезать или дополнить данные?",
                                         "Количество строк в новых данных больше, чем в DataFrame. "
-                                        "Хотите обрезать данные до размера DataFrame?",
-                                        QMessageBox.Yes | QMessageBox.No,
-                                        QMessageBox.No
+                                        "Выберите действие:",
+                                        actions,
+                                        editable=False
                                     )
-                                    if reply == QMessageBox.Yes:
+                                    if not ok:
+                                        return  # Пользователь отменил ввод
+
+                                    if action == "Обрезать данные":
                                         # Обрезать updated_column до размера DataFrame
                                         updated_column = updated_column[:len(self.dataframe)]
-                                    else:
-                                        return
+                                    elif action == "Дополнить другие колонки значениями NaN":
+                                        # Извлечь все старые колонки и дополнить их до новой размерности
+                                        old_columns = {column: self.dataframe[column].tolist() for column in self.dataframe.columns}
+                                        for column in old_columns:
+                                            old_columns[column].extend([float('nan')] * (len(extracted_data) - len(self.dataframe)))
+
+                                        # Добавить новую колонку с извлеченными данными
+                                        old_columns[field_name] = extracted_data
+
+                                        # Удалить старый DataFrame и создать новый с дополненными колонками
+                                        del self.dataframe
+                                        self.dataframe = pd.DataFrame(old_columns)
                                 else:
                                     # Спросить у пользователя, хочет ли он дополнить данные
                                     reply = QMessageBox.question(
@@ -370,20 +443,34 @@ class WebScrapingInterface(QMainWindow):
                     # Проверить соответствие размеров для нового поля
                     if len(self.dataframe) != len(extracted_data):
                         if len(extracted_data) > len(self.dataframe):
-                            # Спросить у пользователя, хочет ли он обрезать данные
-                            reply = QMessageBox.question(
+                            # Спросить у пользователя, хочет ли он обрезать данные или дополнить другие колонки NaN
+                            actions = ["Обрезать данные", "Дополнить другие колонки значениями NaN"]
+                            action, ok = QInputDialog.getItem(
                                 self,
-                                "Обрезать данные?",
+                                "Обрезать или дополнить данные?",
                                 "Количество строк в новых данных больше, чем в DataFrame. "
-                                "Хотите обрезать данные до размера DataFrame?",
-                                QMessageBox.Yes | QMessageBox.No,
-                                QMessageBox.No
+                                "Выберите действие:",
+                                actions,
+                                editable=False
                             )
-                            if reply == QMessageBox.Yes:
+                            if not ok:
+                                return  # Пользователь отменил ввод
+
+                            if action == "Обрезать данные":
                                 # Обрезать extracted_data до размера DataFrame
                                 extracted_data = extracted_data[:len(self.dataframe)]
-                            else:
-                                return
+                            elif action == "Дополнить другие колонки значениями NaN":
+                                    # Извлечь все старые колонки и дополнить их до новой размерности
+                                    old_columns = {column: self.dataframe[column].tolist() for column in self.dataframe.columns}
+                                    for column in old_columns:
+                                        old_columns[column].extend([float('nan')] * (len(extracted_data) - len(self.dataframe)))
+
+                                    # Добавить новую колонку с извлеченными данными
+                                    old_columns[field_name] = extracted_data
+
+                                    # Удалить старый DataFrame и создать новый с дополненными колонками
+                                    del self.dataframe
+                                    self.dataframe = pd.DataFrame(old_columns)
                         else:
                             # Спросить у пользователя, хочет ли он дополнить данные
                             reply = QMessageBox.question(
@@ -399,7 +486,6 @@ class WebScrapingInterface(QMainWindow):
                                 extracted_data.extend([float('nan')] * (len(self.dataframe) - len(extracted_data)))
                             else:
                                 return
-                    # Добавить новое поле
                     self.dataframe[field_name] = extracted_data
             else:
                 # Создать новый DataFrame, если он не существует
