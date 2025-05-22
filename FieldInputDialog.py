@@ -168,7 +168,13 @@ class SliceInputDialog(QDialog):
                     self.all_data = [
                         element.get_text(strip=True)
                         for element in self.soup.find_all(selected_tag)
-                        if element.has_attr(selected_attribute) 
+                        if element.has_attr(selected_attribute) and (
+                            not filter_value or (
+                                isinstance(element.get(selected_attribute), list) and filter_value in element.get(selected_attribute)
+                            ) or (
+                                isinstance(element.get(selected_attribute), str) and filter_value in element.get(selected_attribute)
+                            )
+                        )
                     ]
                 else:
                     self.all_data = [element.get_text(strip=True) for element in self.soup.find_all(selected_tag)]
@@ -176,8 +182,14 @@ class SliceInputDialog(QDialog):
                 self.all_data = [
                     element.get_text(strip=True)
                     for element in self.soup.find_all()
-                    if element.has_attr(selected_attribute)
-                    ]
+                    if element.has_attr(selected_attribute) and (
+                        not filter_value or (
+                            isinstance(element.get(selected_attribute), list) and filter_value in element.get(selected_attribute)
+                        ) or (
+                            isinstance(element.get(selected_attribute), str) and filter_value in element.get(selected_attribute)
+                        )
+                    )
+                ]
             else:
                 self.all_data = [element.get_text(strip=True) for element in self.soup.find_all()]
         else:
@@ -200,12 +212,12 @@ class SliceInputDialog(QDialog):
                     " ".join(element.get(selected_attribute, [])).strip() if isinstance(element.get(selected_attribute), list) 
                     else element.get(selected_attribute, "").strip() 
                     for element in self.soup.find_all(selected_tag)]
-        if self.all_data:
-            # Фильтровать данные по значению атрибута, если указано
-            if filter_value:
-                self.all_data = [
-                    value for value in self.all_data if filter_value in value
-                ]
+            if self.all_data:
+                # Фильтровать данные по значению атрибута, если указано
+                if filter_value:
+                    self.all_data = [
+                        value for value in self.all_data if filter_value in value
+                    ]
         if self.all_data:
             # Исключить пустые значения, если установлен флажок
             if self.exclude_empty_checkbox.isChecked():

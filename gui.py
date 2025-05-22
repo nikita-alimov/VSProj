@@ -46,6 +46,7 @@ class WebScrapingInterface(QMainWindow):
         self.web_view.setUrl(QUrl("https://www.google.com"))
         self.web_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # Update URL input field dynamically when web_view URL changes
+        self.web_view.loadFinished.connect(lambda _: self.scrape_button.click())
         self.web_view.urlChanged.connect(self.update_url_input)
         layout.addWidget(self.web_view)
 
@@ -661,6 +662,7 @@ class WebScrapingInterface(QMainWindow):
 
     def update_url_input(self, url):
         self.url_input.setText(url.toString())
+
 
     def update_scrollbar_marks_size(self):
         """Обновить размеры scrollbar_marks в соответствии с размерами скроллбара."""

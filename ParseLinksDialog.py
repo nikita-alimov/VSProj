@@ -1,6 +1,7 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton, QTextEdit, QLineEdit
+from PyQt5.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton, QTextEdit, QLineEdit
 from PyQt5.QtCore import QTimer
 from PyQt5.QtCore import Qt
+from ExtractLinksDataDialog import ExtractLinksDataDialog
 
 class ParseLinksDialog(QDialog):
     def __init__(self, links_by_tag_attribute, parent=None):
@@ -55,6 +56,10 @@ class ParseLinksDialog(QDialog):
         filtered_links_layout.addWidget(self.filtered_links_label)
         filtered_links_layout.addWidget(self.filtered_links_combobox)
         layout.addLayout(filtered_links_layout)
+
+        self.extract_links_data_btn = QPushButton("Извлечь данные по ссылкам", self)
+        self.extract_links_data_btn.clicked.connect(self.open_extract_links_data_dialog)
+        layout.addWidget(self.extract_links_data_btn)
 
         self.close_button = QPushButton("Закрыть", self)
         self.close_button.clicked.connect(self.close)
@@ -112,3 +117,14 @@ class ParseLinksDialog(QDialog):
         # Обновить выпадающий список отфильтрованных ссылок
         self.filtered_links_combobox.clear()
         self.filtered_links_combobox.addItems(filtered_links)   
+
+    def open_extract_links_data_dialog(self):
+        if self.filtered_links_combobox.count() > 0:
+            links = [self.filtered_links_combobox.itemText(i) for i in range(self.filtered_links_combobox.count())]
+        else:
+            links = [self.links_combobox.itemText(i) for i in range(self.links_combobox.count())]
+        if not links:
+            QMessageBox.warning(self, "Нет ссылок", "Нет ссылок для обработки.")
+            return
+        dlg = ExtractLinksDataDialog(links, parent=self, main_window=self.parent())
+        dlg.exec_()    
