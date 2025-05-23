@@ -44,7 +44,7 @@ class SliceInputDialog(QDialog):
         layout.addWidget(self.attribute_input)
 
         # Поле для фильтрации по значению атрибута (необязательно)
-        self.filter_attribute_value_label = QLabel("Значение фильтра (необязательно):", self)
+        self.filter_attribute_value_label = QLabel("Значение фильтра аттрибута (необязательно):", self)
         self.filter_attribute_value_input = QLineEdit(self)
         self.filter_attribute_value_input.textChanged.connect(self.changing_delay)
         layout.addWidget(self.filter_attribute_value_label)

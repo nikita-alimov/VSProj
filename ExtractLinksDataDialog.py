@@ -6,9 +6,12 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QTimer
 import requests
 from bs4 import BeautifulSoup
-from PyQt5.QtGui import QTextCursor, QTextCharFormat, QColor
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from PyQt5.QtGui import QTextCursor
+import aiohttp
+import asyncio
+from playwright.async_api import async_playwright
+# from selenium import webdriver
+# from selenium.webdriver.chrome.options import Options
 
 class ExtractLinksDataDialog(QDialog):
     def __init__(self, links, parent=None, main_window=None):
@@ -71,7 +74,7 @@ class ExtractLinksDataDialog(QDialog):
         self.result_combo.setPlaceholderText("Результаты извлечения")
         self.result_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.result_lable = QLabel("Результаты: ()", self)
-        self.result_combo.currentIndexChanged.connect(self.on_result_combo_activated)
+        self.result_combo.activated.connect(self.on_result_combo_activated)
         result_layout.addWidget(self.result_lable)
         result_layout.addWidget(self.result_combo)
         
@@ -174,31 +177,77 @@ class ExtractLinksDataDialog(QDialog):
             self.current_index += 1
             self.update_link_display()
 
+    # async def fetch_html(self, link):
+    #     async with aiohttp.ClientSession() as session:
+    #         async with session.get(link) as response:
+    #             return await response.text()
+
+    async def fetch_html_dynamic(self, link):
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(
+                headless=True, 
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",  # Важно для Docker/Linux
+                    "--disable-accelerated-2d-canvas",
+                    "--disable-gpu",            
+                    "--no-zygote",  # Дополнительное ускорение
+                    ],
+                timeout=30000,          # Таймаут запуска (мс)
+            )
+            page = await browser.new_page(
+                ignore_https_errors=True, # Игнорирует SSL-ошибки
+                viewport=None, # Без фиксированного размера окна
+            )
+            # Жёсткие настройки для ускорения
+            page.set_default_timeout(15000)  # Таймаут ожидания элементов (мс)
+            page.set_default_navigation_timeout(100000)  # Таймаут загрузки страницы
+            # Блокируем ненужные ресурсты (CSS, изображения, шрифты)
+            await page.route("**/*.{png,jpg,jpeg,svg,gif,woff2,woff,eot,ttf,css}", lambda route: route.abort())
+
+            # Отключаем Service Workers и кеш (если не нужен)
+            await page.context.clear_permissions()
+            await page.context.clear_cookies()
+            await page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                window.alert = () => {};
+                window.scrollBy = () => {};
+            """)
+            await page.goto(link)
+            html = await page.content()
+            await browser.close()
+            return html
+
     def update_link_display(self):
         link = self.links[self.current_index]
         self.link_label.setText(f"{self.current_index+1}/{len(self.links)}: {link}")
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--disable-plugins")
-        prefs = {
-            "profile.managed_default_content_settings.images": 2,
-            "profile.managed_default_content_settings.stylesheets": 2,
-            "profile.managed_default_content_settings.fonts": 2,
-            "profile.managed_default_content_settings.popups": 2,
-            "profile.managed_default_content_settings.geolocation": 2,
-            "profile.managed_default_content_settings.notifications": 2,
-            "profile.managed_default_content_settings.media_stream": 2,
-}
-        chrome_options.add_experimental_option("prefs", prefs)
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.get(link)
-        html = driver.page_source
-        driver.quit()
+#         chrome_options = Options()
+#         chrome_options.add_argument("--headless")
+#         chrome_options.add_argument("--disable-gpu")
+#         chrome_options.add_argument("--no-sandbox")
+#         chrome_options.add_argument("--disable-dev-shm-usage")
+#         chrome_options.add_argument("--window-size=1920,1080")
+#         chrome_options.add_argument("--disable-extensions")
+#         chrome_options.add_argument("--disable-plugins")
+#         prefs = {
+#             "profile.managed_default_content_settings.images": 2,
+#             "profile.managed_default_content_settings.stylesheets": 2,
+#             "profile.managed_default_content_settings.fonts": 2,
+#             "profile.managed_default_content_settings.popups": 2,
+#             "profile.managed_default_content_settings.geolocation": 2,
+#             "profile.managed_default_content_settings.notifications": 2,
+#             "profile.managed_default_content_settings.media_stream": 2,
+# }
+#         chrome_options.add_experimental_option("prefs", prefs)
+#         driver = webdriver.Chrome(options=chrome_options)
+#         driver.get(link)
+#         html = driver.page_source
+#         driver.quit()
+        # r = requests.get(link, timeout=10)
+        # html = r.text
+        # html = asyncio.run(self.fetch_html(link))
+        html = asyncio.run(self.fetch_html_dynamic(link))
         self.html_view.setPlainText(html)
         self.populate_tag_and_attr_combos(html)
         self.update_result_combo_by_filter()
@@ -302,6 +351,7 @@ class ExtractLinksDataDialog(QDialog):
 
     def populate_result_combo(self, result_str):
         self.result_combo.clear()
+        self.result_combo.addItem("")
         results = [r for r in result_str.split("; ") if r]
         self.result_combo.addItems(results)
         self.result_lable.setText(f"Результаты: ({len(results)})")
@@ -322,7 +372,7 @@ class ExtractLinksDataDialog(QDialog):
         # Очистить предыдущие подсветки
         cursor = self.html_view.textCursor()
         cursor.select(QTextCursor.Document)
-        cursor.setCharFormat(QTextCharFormat())  # сбросить форматирование
+        # cursor.setCharFormat(QTextCharFormat())  # сбросить форматирование
 
         # Найти и подсветить первое вхождение result_text
         html = self.html_view.toPlainText()
@@ -339,18 +389,19 @@ class ExtractLinksDataDialog(QDialog):
         cursor.setPosition(start_idx)
         cursor.setPosition(end_idx, QTextCursor.KeepAnchor)
 
-        fmt = QTextCharFormat()
-        fmt.setBackground(QColor(255, 255, 0, 128))  # полупрозрачный желтый
-        cursor.setCharFormat(fmt)
+        # fmt = QTextCharFormat()
+        # fmt.setBackground(QColor(255, 255, 0, 128))  # полупрозрачный желтый
+        # cursor.setCharFormat(fmt)
 
         # Прокрутить к выделенному месту
         self.html_view.setTextCursor(cursor)
 
 
-    def on_result_combo_activated(self, index):
-        result_text = self.result_combo.itemText(index)
-        self.highlight_result_in_html(result_text)
-        self.auto_select_tag_attr_value(result_text)
+    def on_result_combo_activated(self):
+        result_text = self.result_combo.currentText()
+        if result_text:
+            self.highlight_result_in_html(result_text)
+            self.auto_select_tag_attr_value(result_text)
 
     def auto_select_tag_attr_value(self, result_text):
         html = self.html_view.toPlainText()
@@ -365,31 +416,39 @@ class ExtractLinksDataDialog(QDialog):
         if not matches:
             return
 
-        # Сформировать список вариантов для выбора
+        # Сформировать список вариантов для выбора и сопоставить их с тегами
         options = []
+        option_tags = []
         for tag in matches:
             tag_name = tag.name
             attrs = tag.attrs
             if attrs:
                 for attr_name, attr_value in attrs.items():
                     options.append(f"Тег: <{tag_name}>, Аттрибут: {attr_name}, Значение: {attr_value}")
+                    option_tags.append(tag)
             else:
                 options.append(f"Тег: <{tag_name}>, Без аттрибутов")
+                option_tags.append(tag)
 
         # Если найдено несколько вариантов, спросить пользователя
         if len(options) > 1:
-            item, ok = QInputDialog.getItem(
-            self,
-            "Выбор селектора",
-            "Найдено несколько совпадений. Выберите нужный вариант:",
-            options,
-            0,
-            False
+            dialog = QInputDialog(self)
+            dialog.setFixedWidth(500)
+            item, ok = dialog.getItem(
+                self,
+                "Выбор селектора",
+                "Найдено несколько совпадений. Выберите нужный вариант:",
+                options,
+                0,
+                False
             )
             if not ok:
                 return
             selected_idx = options.index(item)
-            selected_tag = matches[selected_idx]
+            if selected_idx < len(option_tags):
+                selected_tag = option_tags[selected_idx]
+            else:
+                selected_tag = matches[0]
         else:
             selected_tag = matches[0]
 
@@ -405,6 +464,7 @@ class ExtractLinksDataDialog(QDialog):
             idx_attr = self.attr_combo.findText(attr_name)
             if idx_attr != -1:
                 self.attr_combo.setCurrentIndex(idx_attr)
+                self.value_edit.setText(str(attr_value))
             else:
                 self.attr_combo.setCurrentText(attr_name)
                 self.value_edit.setText(str(attr_value))
