@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton, QTextEdit, QLineEdit
+from PyQt5.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton, QTextEdit, QLineEdit, QSizePolicy
 from PyQt5.QtCore import QTimer
 from PyQt5.QtCore import Qt
 from ExtractLinksDataDialog import ExtractLinksDataDialog
@@ -53,6 +53,7 @@ class ParseLinksDialog(QDialog):
         filtered_links_layout = QHBoxLayout()
         self.filtered_links_label = QLabel("Отфильтрованные ссылки (0):", self)
         self.filtered_links_combobox = QComboBox(self)
+        self.filtered_links_combobox.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         filtered_links_layout.addWidget(self.filtered_links_label)
         filtered_links_layout.addWidget(self.filtered_links_combobox)
         layout.addLayout(filtered_links_layout)

@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton, QTextEdit,
     QLineEdit, QTableWidget, QTableWidgetItem, QMessageBox, QProgressBar, QApplication, QSpinBox, QRadioButton,
-    QInputDialog, QSizePolicy
+    QInputDialog, QSizePolicy, QCheckBox
 )
 from PyQt5.QtCore import QTimer
 import requests
@@ -67,6 +67,10 @@ class ExtractLinksDataDialog(QDialog):
         filter_layout.addWidget(self.value_edit)
         layout.addLayout(filter_layout)
 
+        self.check_box_dynamic = QCheckBox("Парсинг динамического контента", self)
+        self.check_box_dynamic.toggled.connect(self.update_link_display_dynamic)
+
+
         # Комбобокс для результатов
         result_layout = QHBoxLayout()
         self.result_combo = QComboBox(self)
@@ -77,6 +81,7 @@ class ExtractLinksDataDialog(QDialog):
         self.result_combo.activated.connect(self.on_result_combo_activated)
         result_layout.addWidget(self.result_lable)
         result_layout.addWidget(self.result_combo)
+        result_layout.addWidget(self.check_box_dynamic)
         
         # --- Срезы и режим извлечения ---
         slice_layout = QHBoxLayout()
@@ -177,10 +182,10 @@ class ExtractLinksDataDialog(QDialog):
             self.current_index += 1
             self.update_link_display()
 
-    # async def fetch_html(self, link):
-    #     async with aiohttp.ClientSession() as session:
-    #         async with session.get(link) as response:
-    #             return await response.text()
+    async def fetch_html(self, link):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(link) as response:
+                return await response.text()
 
     async def fetch_html_dynamic(self, link):
         async with async_playwright() as p:
@@ -214,10 +219,20 @@ class ExtractLinksDataDialog(QDialog):
                 window.alert = () => {};
                 window.scrollBy = () => {};
             """)
-            await page.goto(link)
+            await page.goto(link, wait_until="domcontentloaded")
             html = await page.content()
             await browser.close()
             return html
+
+    def update_link_display_dynamic(self):
+        if not self.check_box_dynamic.isChecked():
+            self.update_link_display()
+        link = self.links[self.current_index]
+        self.link_label.setText(f"{self.current_index+1}/{len(self.links)}: {link}")
+        html = asyncio.run(self.fetch_html_dynamic(link))
+        self.html_view.setPlainText(BeautifulSoup(html, "html.parser").prettify())
+        self.populate_tag_and_attr_combos(html)
+        self.update_result_combo_by_filter()
 
     def update_link_display(self):
         link = self.links[self.current_index]
@@ -246,9 +261,9 @@ class ExtractLinksDataDialog(QDialog):
 #         driver.quit()
         # r = requests.get(link, timeout=10)
         # html = r.text
-        # html = asyncio.run(self.fetch_html(link))
-        html = asyncio.run(self.fetch_html_dynamic(link))
-        self.html_view.setPlainText(html)
+        html = asyncio.run(self.fetch_html(link))
+        # html = asyncio.run(self.fetch_html_dynamic(link))
+        self.html_view.setPlainText(BeautifulSoup(html, "html.parser").prettify())
         self.populate_tag_and_attr_combos(html)
         self.update_result_combo_by_filter()
 
@@ -422,10 +437,16 @@ class ExtractLinksDataDialog(QDialog):
         for tag in matches:
             tag_name = tag.name
             attrs = tag.attrs
-            if attrs:
+            if len(attrs) > 1:
                 for attr_name, attr_value in attrs.items():
                     options.append(f"Тег: <{tag_name}>, Аттрибут: {attr_name}, Значение: {attr_value}")
-                    option_tags.append(tag)
+                    new_tag = soup.new_tag(tag_name)
+                    new_tag[attr_name] = attr_value
+                    option_tags.append(new_tag)
+            elif attrs:
+                attr_name, attr_value = next(iter(attrs.items()))
+                options.append(f"Тег: <{tag_name}>, Аттрибут: {attr_name}, Значение: {attr_value}")
+                option_tags.append(tag)
             else:
                 options.append(f"Тег: <{tag_name}>, Без аттрибутов")
                 option_tags.append(tag)
@@ -433,7 +454,20 @@ class ExtractLinksDataDialog(QDialog):
         # Если найдено несколько вариантов, спросить пользователя
         if len(options) > 1:
             dialog = QInputDialog(self)
-            dialog.setFixedWidth(500)
+            # dialog.setStyleSheet("""
+            #     QComboBox {
+            #         max-width: 500px;
+            #     }
+            #     QInputDialog {                  
+            #         max-width: 500px;             
+            #     }
+                
+            # """)
+            # for widget in dialog.children():
+            #     print(widget.metaObject().className())
+            # combo = dialog.findChild(QComboBox)
+            # if combo:
+            #     combo.setFixedWidth(500)
             item, ok = dialog.getItem(
                 self,
                 "Выбор селектора",
@@ -445,10 +479,7 @@ class ExtractLinksDataDialog(QDialog):
             if not ok:
                 return
             selected_idx = options.index(item)
-            if selected_idx < len(option_tags):
-                selected_tag = option_tags[selected_idx]
-            else:
-                selected_tag = matches[0]
+            selected_tag = option_tags[selected_idx]
         else:
             selected_tag = matches[0]
 
