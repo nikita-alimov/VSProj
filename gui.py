@@ -1,9 +1,11 @@
+import asyncio
 from PyQt5.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox, QMainWindow, QVBoxLayout, QHBoxLayout, QAction, QWidget, QTextEdit, QPushButton, QLineEdit, QSizePolicy, QShortcut, QLineEdit, QComboBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl, QTimer
 from PyQt5.QtGui import QKeySequence, QTextCursor, QColor
 from bs4 import BeautifulSoup
 import sys
+from qasync import QEventLoop
 import requests
 import pandas as pd
 from selenium_test import set_driver  # Импортируем функцию для установки драйвера Selenium
@@ -11,6 +13,8 @@ from ScrollbarMarksWidget import ScrollbarMarks  # Импортируем кла
 from DataFrameViewer import DataFrameViewer # Импортируем класс для отображения DataFrame
 from FieldInputDialog import SliceInputDialog
 from ParseLinksDialog import ParseLinksDialog  # Импортируем класс для отображения ссылок
+
+
 
 
 class WebScrapingInterface(QMainWindow):
@@ -1042,6 +1046,11 @@ class WebScrapingInterface(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
     window = WebScrapingInterface()
     window.show()
-    sys.exit(app.exec_())
+    with loop:
+        # Запустить основной цикл событий
+        loop.run_forever()
+    # sys.exit(app.exec_())
