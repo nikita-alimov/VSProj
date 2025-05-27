@@ -232,28 +232,41 @@ class WebScrapingInterface(QMainWindow):
 
         # return links_by_tag_attribute
     
-    def extract_data(self):
+    def extract_data(self, data_list=None, field_name=None):
         """Извлечь данные по текущим фильтрам и сохранить в DataFrame."""
         # Получить текущий HTML из html_view
-        html = self.html_view.toPlainText()
-        # soup = BeautifulSoup(html, 'html.parser')
-
         if hasattr(self, 'dataframe') and self.dataframe.empty:
             del self.dataframe
+        all_data = []
+        if data_list:
+            # Используем готовый список
+            all_data = data_list
+            start, end = 0, len(all_data) - 1
+        else:
+            html = self.html_view.toPlainText()
+            dialog = SliceInputDialog(html, self)
+            if dialog.exec_() == QDialog.Accepted:
+                all_data, start, end, field_name = dialog.get_values()
+            else:
+                all_data = []
+
+        # soup = BeautifulSoup(html, 'html.parser')
+
+
 
         # Извлечь текст всех элементов
         # all_data = [element.get_text(strip=True) for element in soup.find_all()]
         # Показать диалог для ввода параметров
-        dialog = SliceInputDialog(html, self)
+        
         # dialog.attribute_input.clear()
         # dialog.attribute_input.addItem("")
         # dialog.attribute_input.addItems([self.attributes_dropdown_without_value.itemText(i) for i in range(self.attributes_dropdown_without_value.count())])
         # dialog.tag_input.clear()
         # dialog.tag_input.addItem("")
         # dialog.tag_input.addItems([self.tags_dropdown.itemText(i) for i in range(self.tags_dropdown.count())])
-        if dialog.exec_() == QDialog.Accepted:
+
             # Check if a specific attribute is selected in FieldInputDialog
-            all_data, start, end, field_name = dialog.get_values()
+            
             # Check if the user wants to extract text between tags
             # if dialog.extract_text_radio.isChecked():
             #     # Extract text between the selected tags
@@ -306,7 +319,7 @@ class WebScrapingInterface(QMainWindow):
         # if start > end:
         #     QMessageBox.warning(self, "Ошибка", "Начальная строка не может быть больше конечной.")
         #     return
-
+        if all_data:
         # Взять срез данных
             extracted_data = all_data[start:end + 1]
 
