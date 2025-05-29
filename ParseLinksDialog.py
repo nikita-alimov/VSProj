@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton, QTextEdit, QLineEdit, QSizePolicy
+from PyQt5.QtWidgets import QDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QInputDialog, QLabel, QComboBox, QPushButton, QTextEdit, QLineEdit, QSizePolicy
 from PyQt5.QtCore import QTimer
 from PyQt5.QtCore import Qt
 from ExtractLinksDataDialog import ExtractLinksDataDialog
@@ -61,6 +61,10 @@ class ParseLinksDialog(QDialog):
         self.extract_links_data_btn = QPushButton("Извлечь данные по ссылкам", self)
         self.extract_links_data_btn.clicked.connect(self.open_extract_links_data_dialog)
         layout.addWidget(self.extract_links_data_btn)
+
+        self.extract_img_btn = QPushButton("Сохранить в датафрейм (только для изображений)", self)
+        self.extract_img_btn.clicked.connect(self.extract_img)
+        layout.addWidget(self.extract_img_btn)
 
         self.close_button = QPushButton("Закрыть", self)
         self.close_button.clicked.connect(self.close)
@@ -129,3 +133,59 @@ class ParseLinksDialog(QDialog):
             return
         dlg = ExtractLinksDataDialog(links, parent=self, main_window=self.parent())
         dlg.exec_()    
+
+    def extract_img(self):
+        """
+        Сохраняет ссылки на изображения в датафрейм главного окна (WebScrapingInterface).
+        Использует отфильтрованные ссылки, если они есть, иначе все ссылки.
+        """
+        # Получаем ссылки из отфильтрованного комбобокса или из обычного
+        if self.filtered_links_combobox.count() > 0:
+            links = [self.filtered_links_combobox.itemText(i) for i in range(self.filtered_links_combobox.count())]
+        else:
+            links = [self.links_combobox.itemText(i) for i in range(self.links_combobox.count())]
+
+        if not links:
+            QMessageBox.warning(self, "Нет ссылок", "Нет ссылок для сохранения в датафрейм.")
+            return
+
+        # Проверяем, что ссылки действительно ведут на изображения (опционально)
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']
+        image_links = [link for link in links if any(ext in link.lower() for ext in image_extensions)]
+        
+        if not image_links:
+            reply = QMessageBox.question(
+                self,
+                "Нет изображений",
+                "Среди выбранных ссылок не обнаружено изображений (jpg, png, gif, webp, svg).\n"
+                "Все равно сохранить в датафрейм?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                return
+            image_links = links  # Используем все ссылки, если пользователь согласился
+
+        # Запрашиваем у пользователя имя поля
+        field_name, ok = QInputDialog.getText(
+            self,
+            "Имя поля",
+            "Введите название поля для сохранения ссылок:",
+            text="image_url"  # Значение по умолчанию
+        )
+        
+        if not ok or not field_name.strip():
+            return  # Пользователь отменил ввод
+
+        field_name = field_name.strip()
+
+        # Получаем доступ к главному окну
+        main_window = self.parent()
+        if not hasattr(main_window, 'extract_data'):
+            QMessageBox.warning(self, "Ошибка", "Не удалось получить доступ к главному окну.")
+            return
+
+        # Передаем ссылки в главное окно для сохранения в датафрейм
+        main_window.extract_data(data_list=image_links, field_name=field_name)
+        
+        # Закрываем диалог после успешного сохранения
+        self.close()

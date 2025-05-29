@@ -255,7 +255,7 @@ class ExtractLinksDataDialog(QDialog):
                     window.alert = () => {};
                     window.scrollBy = () => {};
                 """)
-                await page.goto(link, wait_until="domcontentloaded")
+                await page.goto(link)
                 html = await page.content()
                 await browser.close()
                 return html
@@ -849,7 +849,7 @@ class ExtractLinksDataDialog(QDialog):
                 
                 # Ускоренные настройки
                 await page.route("**/*.{png,jpg,svg,woff2,css}", lambda route: route.abort())
-                await page.goto(link, timeout=60000, wait_until="domcontentloaded")
+                await page.goto(link, timeout=100000)
                 
                 html = await page.content()
                 result = self.extract_from_html_with_slice(html, tag, attr, value)

@@ -13,6 +13,7 @@ from ScrollbarMarksWidget import ScrollbarMarks  # Импортируем кла
 from DataFrameViewer import DataFrameViewer # Импортируем класс для отображения DataFrame
 from FieldInputDialog import SliceInputDialog
 from ParseLinksDialog import ParseLinksDialog  # Импортируем класс для отображения ссылок
+from styles import apply_common_styles
 
 
 
@@ -534,18 +535,18 @@ class WebScrapingInterface(QMainWindow):
     def apply_styles(self):
         """Применить стили к интерфейсу."""
         self.setStyleSheet("""
-            QMainWindow {
+            QDialog, QMainWindow, QWidget {
                 background-color: #1e1e1e;
                 color: #d4d4d4;
             }
 
-            QLineEdit {
-                background-color: #252526;
-                color: #d4d4d4;
-                border: 1px solid #3c3c3c;
-                border-radius: 4px;
-                padding: 4px;
-            }
+            QLineEdit, QTextEdit, QComboBox {
+                        background-color: #252526;
+                        color: #d4d4d4;
+                        border: 1px solid #3c3c3c;
+                        border-radius: 4px;
+                        padding: 4px;
+                    }
 
             QPushButton {
                 background-color: #007acc;
@@ -649,6 +650,14 @@ class WebScrapingInterface(QMainWindow):
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
                 background: none;  /* Убираем фон между ползунком и краями */
             }
+
+            QInputDialog, QDialog {
+            max-width: 600px;
+            }
+            QInputDialog QLineEdit, QInputDialog QComboBox {
+                min-width: 300px;
+                max-width: 500px;
+            }                             
         """)
 
     def resizeEvent(self, event):
