@@ -16,8 +16,8 @@ class ParseLinksDialog(QDialog):
         self.timer.timeout.connect(self.apply_filter)  # Скрыть error_label по истечении времени
 
         # Добавляем custom_links в словарь ссылок
-        # self.links_by_tag_attribute = links_by_tag_attribute.copy()
         self.links_by_tag_attribute["custom_links"] = self.load_user_links()
+        
         # Основной макет
         layout = QVBoxLayout(self)
 
@@ -25,7 +25,12 @@ class ParseLinksDialog(QDialog):
         pair_layout = QHBoxLayout()
         self.pair_label = QLabel("Выберите пару тег-аттрибут:", self)
         self.pair_combobox = QComboBox(self)
-        self.pair_combobox.addItems(sorted(links_by_tag_attribute.keys()))
+        # Добавляем сначала custom_links, затем остальные элементы в отсортированном порядке
+        all_items = sorted(self.links_by_tag_attribute.keys())
+        if "custom_links" in all_items:
+            all_items.remove("custom_links")
+        self.pair_combobox.addItem("custom_links")
+        self.pair_combobox.addItems(all_items)
         self.pair_combobox.currentIndexChanged.connect(self.update_links_combobox)
         pair_layout.addWidget(self.pair_label)
         pair_layout.addWidget(self.pair_combobox)
@@ -38,11 +43,6 @@ class ParseLinksDialog(QDialog):
         links_layout.addWidget(self.links_label)
         links_layout.addWidget(self.links_combobox)
         layout.addLayout(links_layout)
-
-        # # Текстовое поле для отображения выбранной ссылки
-        # self.link_display = QTextEdit(self)
-        # self.link_display.setReadOnly(True)
-        # layout.addWidget(self.link_display)
 
         # Текстовое поле для отображения всех ссылок
         self.links_textedit = QTextEdit(self)
@@ -122,13 +122,7 @@ class ParseLinksDialog(QDialog):
         # Применить фильтр
         self.changing()
 
-        # Подключить событие изменения ссылки
-        # self.links_combobox.currentIndexChanged.connect(self.update_link_display)
 
-    # def update_link_display(self):
-    #     """Обновить текстовое поле для отображения выбранной ссылки."""
-    #     selected_link = self.links_combobox.currentText()
-    #     self.link_display.setText(selected_link)
 
     def save_links_to_custom(self):
         """Сохраняет ссылки из текстового поля в custom_links."""

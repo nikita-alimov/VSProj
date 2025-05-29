@@ -196,7 +196,7 @@ class DataFrameViewer(QMainWindow):
         super().__init__()
         self.setWindowTitle("DataFrame Viewer")
         self.setGeometry(200, 200, 800, 600)
-        
+        self.apply_styles()
         self.download_thread = None
         self.selected_column = None
         self.results_column = None
@@ -243,6 +243,167 @@ class DataFrameViewer(QMainWindow):
     def update_dataframe(self, new_dataframe):
         self.model = PandasModel(new_dataframe)
         self.table.setModel(self.model)
+
+    def apply_styles(self):
+        """Применить стили к интерфейсу."""
+        self.setStyleSheet("""
+            QDialog, QMainWindow, QWidget {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+            }
+
+            QLineEdit, QTextEdit, QComboBox {
+                        background-color: #252526;
+                        color: #d4d4d4;
+                        border: 1px solid #3c3c3c;
+                        border-radius: 4px;
+                        padding: 4px;
+                    }
+
+            QPushButton {
+                background-color: #007acc;
+                color: #ffffff;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+            }
+
+            QPushButton:hover {
+                background-color: #005f9e;
+            }
+
+            QPushButton:pressed {
+                background-color: #004a7c;
+            }
+
+            QTextEdit {
+                background-color: #252526;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+                padding: 4px;
+            }
+
+            QComboBox {
+                background-color: #252526;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+                padding: 4px;
+            }
+
+            QComboBox QAbstractItemView {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                selection-background-color: #007acc;
+            }
+
+            QMenuBar {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+            }
+
+            QMenuBar::item {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+            }
+
+            QMenuBar::item:selected {
+                background-color: #007acc;
+            }
+
+            QMenu {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+            }
+
+            QMenu::item:selected {
+                background-color: #007acc;
+            }
+
+            QScrollBar:vertical {
+            background-color: #2d2d2d;
+            width: 14px;  
+            margin: 0px 3px 0px 3px;
+            border: none;
+            }
+
+            QScrollBar::handle:vertical {
+                background-color: #5a5a5a;  
+                min-height: 14px;
+                border-radius: 7px;  
+                margin-top: 14px;  /* Отступ сверху для верхней кнопки */
+                margin-bottom: 14px;  /* Отступ снизу для нижней кнопки */
+            }
+
+            QScrollBar::handle:vertical:hover {
+                background-color: #787878;  
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                background-color: #3c3c3c;  /* Темный фон для кнопок */
+                height: 14px;  /* Высота кнопок */
+                subcontrol-origin: margin;
+                border-radius: 1px;  /* Закругленные края */
+            }
+
+            QScrollBar::add-line:vertical {
+                subcontrol-position: bottom;  /* Позиция кнопки вниз */
+            }
+
+            QScrollBar::sub-line:vertical {
+                subcontrol-position: top;  /* Позиция кнопки вверх */
+            }
+
+            QScrollBar::add-line:vertical:hover, QScrollBar::sub-line:vertical:hover {
+                background-color: #5a5a5a;  /* Более светлый серый при наведении */
+            }
+
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+                background: none;  /* Убираем фон между ползунком и краями */
+            }
+
+            QInputDialog, QDialog {
+            max-width: 600px;
+            }
+            QInputDialog QLineEdit, QInputDialog QComboBox {
+                min-width: 300px;
+                max-width: 500px;
+            }      
+            /* --- Стили для таблиц --- */
+            QTableView, QTableWidget {
+                background-color: #232323;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+                gridline-color: #444444;
+                selection-background-color: #264f78;
+                selection-color: #ffffff;
+                font-size: 13px;
+            }
+            QHeaderView::section {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                padding: 4px;
+                font-weight: bold;
+            }
+            QTableCornerButton::section {
+                background-color: #2d2d2d;
+                border: 1px solid #3c3c3c;
+            }
+            QTableView QTableCornerButton::section, QTableWidget QTableCornerButton::section {
+                background-color: #2d2d2d;
+                border: 1px solid #3c3c3c;
+            }
+            QTableView::item:selected, QTableWidget::item:selected {
+                background-color: #264f78;
+                color: #ffffff;
+            }
+            QTableView::item, QTableWidget::item {
+                padding: 4px;
+            }                       
+        """)
 
     def delete_column(self):
         if not self.model._data.columns.empty:

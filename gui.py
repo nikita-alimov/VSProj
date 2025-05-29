@@ -657,7 +657,40 @@ class WebScrapingInterface(QMainWindow):
             QInputDialog QLineEdit, QInputDialog QComboBox {
                 min-width: 300px;
                 max-width: 500px;
-            }                             
+            }      
+            /* --- Стили для таблиц --- */
+            QTableView, QTableWidget {
+                background-color: #232323;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+                gridline-color: #444444;
+                selection-background-color: #264f78;
+                selection-color: #ffffff;
+                font-size: 13px;
+            }
+            QHeaderView::section {
+                background-color: #2d2d2d;
+                color: #d4d4d4;
+                border: 1px solid #3c3c3c;
+                padding: 4px;
+                font-weight: bold;
+            }
+            QTableCornerButton::section {
+                background-color: #2d2d2d;
+                border: 1px solid #3c3c3c;
+            }
+            QTableView QTableCornerButton::section, QTableWidget QTableCornerButton::section {
+                background-color: #2d2d2d;
+                border: 1px solid #3c3c3c;
+            }
+            QTableView::item:selected, QTableWidget::item:selected {
+                background-color: #264f78;
+                color: #ffffff;
+            }
+            QTableView::item, QTableWidget::item {
+                padding: 4px;
+            }                       
         """)
 
     def resizeEvent(self, event):
