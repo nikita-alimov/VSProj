@@ -849,7 +849,19 @@ class ExtractLinksDataDialog(QDialog):
                 
                 # Ускоренные настройки
                 await page.route("**/*.{png,jpg,svg,woff2,css}", lambda route: route.abort())
-                await page.goto(link, timeout=100000)
+                # Ожидаем только нужные элементы (если фильтры заданы)
+                if tag or attr or value:
+                    selector = self._build_selector(tag, attr, value)
+                    try:
+                        # Ждем появления хотя бы одного целевого элемента
+                        await page.goto(link, timeout=100000)
+                        await page.wait_for_selector(selector, timeout=100000)
+                    except Exception as e:
+                        print(f"Элементы не найдены: {e}")
+                        return (link, "Ошибка: целевые элементы не загрузились")
+                else:
+                    # Без фильтров — грузим полностью
+                    await page.goto(link, timeout=100000)
                 
                 html = await page.content()
                 result = self.extract_from_html_with_slice(html, tag, attr, value)
@@ -864,7 +876,24 @@ class ExtractLinksDataDialog(QDialog):
             finally:
                 if context:
                     await context.close()
-    
+
+    def _build_selector(self, tag, attr, value):
+        selector = tag if tag else "*"
+        if not attr:
+            return selector
+
+        # Экранируем значение (если есть)
+        if value:
+            try:
+                from playwright.async_api import escape_for_attribute_selector
+                value_escaped = escape_for_attribute_selector(value)
+            except ImportError:
+                value_escaped = value.replace('"', r'\"')
+            selector += f'[{attr}*="{value_escaped}"]'
+        else:
+            selector += f'[{attr}]'
+        return selector
+
     def _remove_task(self, task):
         """Callback для удаления завершенной задачи"""
         self._extract_tasks.discard(task)

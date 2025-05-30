@@ -8,6 +8,7 @@ import requests
 import re
 from urllib.parse import urlparse
 import mimetypes
+from DataProcessor import DataProcessor  # Импортируем модуль обработки данных
 
 class DownloadThread(QThread):
     progress = pyqtSignal(int)
@@ -209,12 +210,15 @@ class DataFrameViewer(QMainWindow):
         # Кнопки
         self.delete_column_button = QPushButton("Удалить колонку")
         self.clear_table_button = QPushButton("Очистить таблицу")
+        self.process_data_button = QPushButton("Обработать данные")
         self.save_csv_button = QPushButton("Записать в CSV файл")
         self.open_csv_button = QPushButton("Открыть CSV")
         self.download_images_button = QPushButton("Скачать изображения")
         self.cancel_download_button = QPushButton("Отменить загрузку")
         self.cancel_download_button.hide()
 
+
+        
         # Подключение кнопок
         self.delete_column_button.clicked.connect(self.delete_column)
         self.clear_table_button.clicked.connect(self.clear_table)
@@ -222,11 +226,13 @@ class DataFrameViewer(QMainWindow):
         self.open_csv_button.clicked.connect(self.open_csv)
         self.download_images_button.clicked.connect(self.start_image_download)
         self.cancel_download_button.clicked.connect(self.cancel_image_download)
+        self.process_data_button.clicked.connect(self.open_data_processor)
 
         # Макет
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.delete_column_button)
         button_layout.addWidget(self.clear_table_button)
+        button_layout.addWidget(self.process_data_button)  # Добавляем в существующий layout
         button_layout.addWidget(self.save_csv_button)
         button_layout.addWidget(self.open_csv_button)
         button_layout.addWidget(self.download_images_button)
@@ -574,3 +580,78 @@ class DataFrameViewer(QMainWindow):
         self.download_images_button.show()
         self.cancel_download_button.hide()
         self.download_thread = None
+
+    def handle_processed_data(self, processed_df):
+        """Обрабатывает результат работы модуля"""
+        # Варианты действий с обработанными данными:
+        actions = [
+            "Заменить исходные данные", 
+            "Добавить как новые колонки",
+            "Создать новый DataFrame"
+        ]
+        
+        action, ok = QInputDialog.getItem(
+            self,
+            "Действие с результатом",
+            "Выберите как сохранить обработанные данные:",
+            actions,
+            0, False
+        )
+        
+        if not ok:
+            return
+            
+        if action == "Заменить исходные данные":
+            # Заменяем текущий DataFrame
+            self.update_dataframe(processed_df)
+        elif action == "Добавить как новые колонки":
+            # Объединяем с существующими данными
+            new_df = pd.concat([self.model._data, processed_df], axis=1)
+            self.update_dataframe(new_df)
+        else:  # "Создать новый DataFrame"
+            # Создаем новый просмотрщик
+            new_viewer = DataFrameViewer(processed_df)
+            new_viewer.show()
+
+    def open_data_processor(self):
+        # Получаем текущие данные из модели
+        df = self.model._data
+        
+        # Выбираем колонку для обработки
+        column, ok = QInputDialog.getItem(
+            self,
+            "Выбор колонки",
+            "Выберите колонку для обработки:",
+            df.columns.tolist(),
+            0, False
+        )
+        
+        if not ok or not column:
+            return
+            
+        # Получаем данные выбранной колонки
+        raw_data = df[column].tolist()
+        selection = self.table.selectionModel()
+        selected_rows = [index.row() for index in selection.selectedRows()]
+        
+        if selected_rows:
+            # Предложить выбор - обработать все или только выделенное
+            choice = QMessageBox.question(
+                self,
+                "Выбор данных",
+                "Обработать выделенные строки или всю колонку?",
+                # "Выделенные|Всю колонку",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if choice == QMessageBox.Yes:
+                raw_data = [self.model._data.iloc[row][column] for row in selected_rows]
+
+        # Создаем и настраиваем модуль обработки
+        processor = DataProcessor(raw_data, self)  # Передаем self как parent
+        processor.setWindowTitle(f"Обработка данных: {column}")
+        
+        # Подключаем сигнал завершения обработки
+        processor.processing_finished.connect(self.handle_processed_data)
+        processor.exec_()
