@@ -159,7 +159,10 @@ class ExtractLinksDataDialog(QDialog):
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
+
         # --- Кнопки управления процессом извлечения ---
+        self.retry_btn = QPushButton("Повторить проваленные", self)
+        self.retry_btn.clicked.connect(lambda: asyncio.create_task(self.retry_failed()))
         self.stop_btn = QPushButton("Стоп", self)
         self.stop_btn.setVisible(False)
         self.stop_btn.clicked.connect(self.on_stop_clicked)
@@ -169,9 +172,12 @@ class ExtractLinksDataDialog(QDialog):
         self.cancel_btn = QPushButton("Остановить", self)
         self.cancel_btn.setVisible(False)
         self.cancel_btn.clicked.connect(self.on_cancel_clicked)
+        btns_layout.addWidget(self.retry_btn)
         btns_layout.addWidget(self.stop_btn)
         btns_layout.addWidget(self.resume_btn)
         btns_layout.addWidget(self.cancel_btn)
+
+
 
         # --- Переменные для управления процессом ---
         self._extract_paused = False
@@ -243,7 +249,7 @@ class ExtractLinksDataDialog(QDialog):
                 )
                 # Жёсткие настройки для ускорения
                 page.set_default_timeout(15000)  # Таймаут ожидания элементов (мс)
-                page.set_default_navigation_timeout(100000)  # Таймаут загрузки страницы
+                page.set_default_navigation_timeout(300000)  # Таймаут загрузки страницы
                 # Блокируем ненужные ресурсты (CSS, изображения, шрифты)
                 await page.route("**/*.{png,jpg,jpeg,svg,gif,woff2,woff,eot,ttf,css}", lambda route: route.abort())
 
@@ -655,7 +661,8 @@ class ExtractLinksDataDialog(QDialog):
             tag = self.tag_combo.currentText().strip()
             attr = self.attr_combo.currentText().strip()
             value = self.value_edit.text().strip()
-            
+            # Создаем список для сохранения результатов в правильном порядке
+            self.results_dict = {link: None for link in self.links}  # Инициализация словаря
             # Настройка UI
             self.progress_bar.setVisible(True)
             self.progress_bar.setMinimum(0)
@@ -692,6 +699,7 @@ class ExtractLinksDataDialog(QDialog):
             async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
                 semaphore = asyncio.Semaphore(5)  # Максимум 5 параллельных запросов
                 tasks = set()
+
                 all_links = self.links[self._extract_current_index + len(self._pending_links):] + self._pending_links
                 # print(len(all_links))
                 self._pending_links = []  # Очищаем список незавершенных
@@ -721,16 +729,18 @@ class ExtractLinksDataDialog(QDialog):
                     
                     try:
                         link, result = await future
-                        # self.results.append((link, result))
+                        self.results_dict[link] = result
                         # self._extract_current_index += 1
-                        # self.progress_bar.setValue(self._extract_current_index)
-                        # QApplication.processEvents()
                         self.loop.call_soon_threadsafe(lambda: self._handle_page_result(link, result))
                     except asyncio.CancelledError:
                         break
                     except Exception as e:
                         print(f"Error processing link: {e}")
-                    
+
+                self.results = [(link, self.results_dict[link]) for link in self.links]
+                if len(self.results) == len(self.links):
+                    self.results.pop()
+
         except Exception as e:
             print(f"Session error: {e}")
         finally:
@@ -789,6 +799,7 @@ class ExtractLinksDataDialog(QDialog):
             # Семафор для ограничения параллельных вкладок
             semaphore = asyncio.Semaphore(5)  # 5 параллельных вкладок
             tasks = set()
+
             # print(len(self._pending_links))
             all_links = self.links[self._extract_current_index + len(self._pending_links):] + self._pending_links
             # print(len(all_links))
@@ -815,14 +826,17 @@ class ExtractLinksDataDialog(QDialog):
                     
                 try:
                     link, result = await future
-                    # self.results.append((link, result))
+                    self.results_dict[link] = result
                     # self._extract_current_index += 1
-                    # self.progress_bar.setValue(self._extract_current_index)
-                    # QApplication.processEvents()
                     self.loop.call_soon_threadsafe(lambda: self._handle_page_result(link, result))
                 except Exception as e:
                     print(f"Error processing link: {e}")
-                    
+                            
+            # Добавляем результаты в правильном порядке
+            self.results = [(link, self.results_dict[link]) for link in self.links]
+            if len(self.results) == len(self.links):
+                self.results.pop()
+
         finally:
             # Корректное завершение ресурсов Playwright
             await self._cleanup_playwright()    
@@ -854,14 +868,14 @@ class ExtractLinksDataDialog(QDialog):
                     selector = self._build_selector(tag, attr, value)
                     try:
                         # Ждем появления хотя бы одного целевого элемента
-                        await page.goto(link, timeout=100000)
+                        await page.goto(link, timeout=300000)
                         await page.wait_for_selector(selector, timeout=100000)
                     except Exception as e:
                         print(f"Элементы не найдены: {e}")
                         return (link, "Ошибка: целевые элементы не загрузились")
                 else:
                     # Без фильтров — грузим полностью
-                    await page.goto(link, timeout=100000)
+                    await page.goto(link, timeout=300000)
                 
                 html = await page.content()
                 result = self.extract_from_html_with_slice(html, tag, attr, value)
@@ -883,16 +897,158 @@ class ExtractLinksDataDialog(QDialog):
             return selector
 
         # Экранируем значение (если есть)
-        if value:
-            try:
-                from playwright.async_api import escape_for_attribute_selector
-                value_escaped = escape_for_attribute_selector(value)
-            except ImportError:
-                value_escaped = value.replace('"', r'\"')
-            selector += f'[{attr}*="{value_escaped}"]'
-        else:
+        # if value:
+        #     try:
+        #         from playwright.async_api import escape_for_attribute_selector
+        #         value_escaped = escape_for_attribute_selector(value)
+        #     except ImportError:
+        #         value_escaped = value.replace('"', r'\"')
+        #     selector += f'[{attr}*="{value_escaped}"]'
+        # else:
+        #     selector += f'[{attr}]'
+        # print(f"Current selector: {selector}")
+        if attr:
             selector += f'[{attr}]'
         return selector
+
+
+    @asyncSlot()
+    async def retry_failed(self):
+        # Собираем только ссылки с ошибками, но сохраняем их исходные позиции
+        failed_entries = [(i, url, res) for i, (url, res) in enumerate(self.results) if "Ошибка" in res]
+        
+        if not failed_entries:
+            QMessageBox.information(self, "Нет ошибок", "Нет ссылок с ошибками для повторной обработки.")
+            return
+
+        if self._is_extracting:
+            return
+
+        try:
+            self._is_extracting = True
+            self.loop = asyncio.get_event_loop()
+            
+            # Настройка UI
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setMinimum(0)
+            self.progress_bar.setMaximum(len(failed_entries))
+            self.progress_bar.setValue(0)
+            results_dict = {link: i for i, link in failed_entries}  # Инициализация словаря
+            self._extract_paused = False
+            self._extract_stopped = False
+            self._extract_current_index = 0
+            self.stop_btn.setVisible(True)
+            self.resume_btn.setVisible(False)
+            self.cancel_btn.setVisible(False)
+
+            # Получаем текущие параметры извлечения
+            tag = self.tag_combo.currentText().strip()
+            attr = self.attr_combo.currentText().strip()
+            value = self.value_edit.text().strip()
+
+            # Создаем временный список для хранения новых результатов
+            new_results = list(self.results)  # Копируем текущие результаты
+
+            if self.check_box_dynamic.isChecked():
+                # Используем Playwright для динамического контента
+                self._playwright = await async_playwright().start()
+                self._browser = await self._playwright.chromium.launch(
+                    headless=True,
+                    args=["--disable-blink-features=AutomationControlled"]
+                )
+
+                semaphore = asyncio.Semaphore(5)  # Ограничение параллельных задач
+                tasks = []
+
+                for idx, url in failed_entries:
+                    if self._extract_stopped:
+                        break
+
+                    task = asyncio.create_task(
+                        self._process_playwright_link(url, tag, attr, value, semaphore)
+                    )
+                    task.add_done_callback(self._remove_task)
+                    self._extract_tasks.add(task)
+                    tasks.append(task)
+
+                # Обрабатываем результаты по мере завершения задач
+                for future in asyncio.as_completed(tasks):
+                    if self._extract_stopped:
+                        break
+
+                    try:
+                        link, result = await future
+                        # Обновляем результат в исходной позиции
+                        original_idx = results_dict[link]
+                        new_results[original_idx] = (link, result)
+                        
+                        self.loop.call_soon_threadsafe(
+                            lambda: self._handle_page_result(link, result, update_results=False)
+                        )
+                        
+                        # Обновляем основной список результатов
+                        self.loop.call_soon_threadsafe(
+                            lambda: self._update_results_list(new_results)
+                        )
+                        
+                    except Exception as e:
+                        print(f"Error processing link: {e}")
+
+                await self._cleanup_playwright()
+            else:
+                # Используем aiohttp для статического контента
+                connector = aiohttp.TCPConnector(limit=5, force_close=True)
+                timeout = aiohttp.ClientTimeout(total=30)
+                
+                async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                    semaphore = asyncio.Semaphore(5)
+                    tasks = []
+
+                    for idx, url in failed_entries:
+                        if self._extract_stopped:
+                            break
+
+                        task = asyncio.create_task(
+                            self._process_aiohttp_link(session, url, tag, attr, value, semaphore)
+                        )
+                        task.add_done_callback(self._remove_task)
+                        self._extract_tasks.add(task)
+                        tasks.append(task)
+
+                    for future in asyncio.as_completed(tasks):
+                        if self._extract_stopped:
+                            break
+
+                        try:
+                            link, result = await future
+                            original_idx = results_dict[link]
+                            new_results[original_idx] = (link, result)
+                            
+                            self.loop.call_soon_threadsafe(
+                                lambda: self._handle_page_result(link, result, update_results=False)
+                            )
+                            
+                            self.loop.call_soon_threadsafe(
+                                lambda: self._update_results_list(new_results)
+                            )
+                            
+                        except Exception as e:
+                            print(f"Error processing link: {e}")
+
+        finally:
+            if not self._extract_paused:
+                self._is_extracting = False
+                self.stop_btn.setVisible(False)
+                self.progress_bar.setVisible(False)
+                
+                if not self._extract_stopped:
+                    QMessageBox.information(self, "Готово", "Повторная обработка завершена.")
+                    # Обновляем таблицу результатов
+                    self.show_results()
+
+    def _update_results_list(self, new_results):
+        """Обновляет основной список результатов"""
+        self.results = new_results
 
     def _remove_task(self, task):
         """Callback для удаления завершенной задачи"""
@@ -907,10 +1063,11 @@ class ExtractLinksDataDialog(QDialog):
             await self._playwright.stop()
             self._playwright = None
     
-    def _handle_page_result(self, link, result):
+    def _handle_page_result(self, link, result, update_result = True):
         """Обработка результата в основном потоке Qt"""
         # result = self.extract_from_html_with_slice(html, tag, attr, value)
-        self.results.append((link, result))
+        if update_result:
+            self.results.append((link, result))
         self._extract_current_index += 1
         self.progress_bar.setValue(self._extract_current_index)
         QApplication.processEvents()

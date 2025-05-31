@@ -210,6 +210,7 @@ class DataFrameViewer(QMainWindow):
         # Кнопки
         self.delete_column_button = QPushButton("Удалить колонку")
         self.clear_table_button = QPushButton("Очистить таблицу")
+        self.drop_empty_button = QPushButton("Удалить строки с пустыми значениями")
         self.process_data_button = QPushButton("Обработать данные")
         self.save_csv_button = QPushButton("Записать в CSV файл")
         self.open_csv_button = QPushButton("Открыть CSV")
@@ -219,6 +220,7 @@ class DataFrameViewer(QMainWindow):
 
 
         
+        
         # Подключение кнопок
         self.delete_column_button.clicked.connect(self.delete_column)
         self.clear_table_button.clicked.connect(self.clear_table)
@@ -227,11 +229,13 @@ class DataFrameViewer(QMainWindow):
         self.download_images_button.clicked.connect(self.start_image_download)
         self.cancel_download_button.clicked.connect(self.cancel_image_download)
         self.process_data_button.clicked.connect(self.open_data_processor)
+        self.drop_empty_button.clicked.connect(self.drop_empty_rows)
 
         # Макет
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.delete_column_button)
         button_layout.addWidget(self.clear_table_button)
+        button_layout.addWidget(self.drop_empty_button)
         button_layout.addWidget(self.process_data_button)  # Добавляем в существующий layout
         button_layout.addWidget(self.save_csv_button)
         button_layout.addWidget(self.open_csv_button)
@@ -428,6 +432,53 @@ class DataFrameViewer(QMainWindow):
                     self.update_dataframe(self.model._data)
         else:
             QMessageBox.warning(self, "Ошибка", "Нет колонок для удаления")
+
+    def drop_empty_rows(self):
+        if not self.model._data.columns.empty:
+            column_name, ok = QInputDialog.getItem(
+                self, 
+                "Удалить строки с пустыми значениями",
+                "Выберите колонку для проверки:",
+                self.model._data.columns.tolist(),
+                0,  # Индекс выбранного по умолчанию
+                False  # Не редактируемый
+            )
+            
+            if ok and column_name:
+                initial_count = len(self.model._data)
+                # Сохраняем копию исходного DataFrame для сравнения
+                original_df = self.model._data.copy()
+                
+                # Удаляем строки с пустыми значениями (NaN, None или пустые строки)
+                self.model._data.dropna(subset=[column_name], inplace=True)
+                
+                # Также удаляем строки с пустыми строками, если колонка строковая
+                if pd.api.types.is_string_dtype(self.model._data[column_name]):
+                    self.model._data = self.model._data[
+                        self.model._data[column_name].astype(str).str.strip() != ''
+                    ]
+                
+                # Сбрасываем индекс, чтобы нумерация была последовательной
+                self.model._data.reset_index(drop=True, inplace=True)
+                
+                removed_count = initial_count - len(self.model._data)
+                self.update_dataframe(self.model._data)
+                
+                if removed_count > 0:
+                    QMessageBox.information(
+                        self, 
+                        "Готово", 
+                        f"Удалено {removed_count} строк с пустыми значениями в колонке '{column_name}'.\n"
+                        f"Индексы строк были сброшены."
+                    )
+                else:
+                    QMessageBox.information(
+                        self,
+                        "Нет изменений",
+                        f"В колонке '{column_name}' не найдено пустых значений."
+                    )
+        else:
+            QMessageBox.warning(self, "Ошибка", "Нет колонок для проверки")
 
     def clear_table(self):
         self.model._data.drop(self.model._data.index, inplace=True)
